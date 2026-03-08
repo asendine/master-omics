@@ -1,5 +1,6 @@
 ---
 title: "Análisis de datos ómicos - Actividad 1.2"
+subtitle: "Introducción a la ultraseqüenciación"
 author: "Alejandro Sendín Emiliano"
 date: "`r Sys.Date()`"
 output: pdf_document
@@ -31,6 +32,15 @@ library(knitr)
 
 `r Sys.Date()`
 
+# Conseguir unos datos para la actividad
+
+# Breve descripción de los datos
+Quin és el format de l'arxiu?
+Quantes seqüències conté?
+Altra informació addicional que considereu rellevant (tecnologia, tipus de seqüenciació utilitzada, espècie que s'ha seqüenciat, etc.)
+# Control de calidad usando Galaxy
+Galaxy incorpora múltiples eines per al control de qualitat de dades de seqüenciació. Amb què utilitzeu l'eina FastQC serà suficient.
+Teniu en compte que no se us demana que resolgueu eventuals problemes que podeu detectar (com eliminació d'adaptadors o altres). Tan sols hauríeu de determinar la qualitat de les seqüències, i elaborar un petit informe que ho expliqui.
 
 
 
