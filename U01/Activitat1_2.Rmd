@@ -3,7 +3,11 @@ title: "Análisis de datos ómicos - Actividad 1.2"
 subtitle: "Introducción a la ultraseqüenciación"
 author: "Alejandro Sendín Emiliano"
 date: "`r Sys.Date()`"
-output: pdf_document
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    latex_engine: xelatex
 ---
 
 ```{r setup, include=FALSE}
@@ -34,13 +38,90 @@ library(knitr)
 
 # Conseguir unos datos para la actividad
 
+Para esta actividad quería buscar datos relacionados con mi profesión, así que decidí ir al repositorio de GEO para buscar estudios de cáncer. Centré la búsqueda en la proteina BCL-2, diana farmacológica del fármaco Venetoclax. Mi interés recae simplemente por curiosidad, ya que recientemente estamos trabajando en varios ensayos clínicos de leucemia mieloide aguda que llevan esta molécula.
+
+A partir de aquí, también filtré por estudios de tipo "Expression profiling by high throughput sequencing" y, me hubiera gustado que hubiera sido en humanos y con datos single-end para que ocupe menos y el análisis sea más ágil, pero estos dos últimos criterios fueron complicados de cumplir y, aparte, di con un estudio que junto a Venetoclax, añade una molecula nos es conocida en el centro: el Inobrodib (CCS1477).
+
+Así es como terminé escogiendo los datos del estudio "P300/CBP inhibition with gilteritinib and venetoclax targets leukemia stem cells in epigenetic mutant AML [RNA-Seq]". Para obtenerlos, fui al enlace de SRA y busqué el SRR más liviano (SRR35607842). Puse su identificador en Galaxy y lo descargué directamente en la web para su posterior analisis. Al tratarse de un SRR paired-end, descargué tanto el forward como el reverse.
+
+Paralelamente, obtuve un SRR single-end pequeño a partir del estudio "Jun is a key Regulator of Prostate Cancer Progression and Immune Microenvironment Dynamics" (SRR25925686) por si el análisis del estudio de interés no resultaba satisfactorio.
+
 # Breve descripción de los datos
-Quin és el format de l'arxiu?
-Quantes seqüències conté?
-Altra informació addicional que considereu rellevant (tecnologia, tipus de seqüenciació utilitzada, espècie que s'ha seqüenciat, etc.)
+
+Cuando descargué los datos de SRR35607842, vi que el formato del archivo comprimido era ".fastqsanger.gz", mientras que para la cadena sencilla, SRR35607842, los datos estan en formato ".fastq.gz". A priori pensé que ambos archivos tendrían el mismo formato, así que esto para mí fue una sorpresa, ya que implica que pueden haber otros más. Sin embargo, según he leído, no debería tener importancia de cara a la realización del ejercicio.
+
+Dicho esto, el resto de la actividad se responderá en referencia a SRR35607842 que es el que finalmente me he decantado a usar.
+
+## Secuencias, codificación y otros datos de interés
+
+La codificación está hecha mediante Illumina, en concreto Illumina NovaSeq 6000, aunque en el resumen de Galaxy se especifica "Sanger / Illumina 1.9". En los videos explicativos se incide bastante en que es la empresa que controla el mercado y ha sido interesante ver como consta en muchas otras secuenciaciones de otros estudios.
+
+Curiosamente, en el informe de FastQC se indica una longitud de secuencia de entre 35-101 pb. Es un margen grande que se justificará en el apartado [Sequence lenght distribution](###Sequence%20lenght%20distribution).
+
+Finalmente, indicar que la especie del estudio y por tanto, de la secuencia, es Mus musculus.
+
 # Control de calidad usando Galaxy
-Galaxy incorpora múltiples eines per al control de qualitat de dades de seqüenciació. Amb què utilitzeu l'eina FastQC serà suficient.
-Teniu en compte que no se us demana que resolgueu eventuals problemes que podeu detectar (com eliminació d'adaptadors o altres). Tan sols hauríeu de determinar la qualitat de les seqüències, i elaborar un petit informe que ho expliqui.
 
+Tan sols hauríeu de determinar la qualitat de les seqüències, i elaborar un petit informe que ho expliqui. Voy a describir los puntos conflictivos (amarillos o rojos) que han aparecido en el informe para SRR35607842 forward y reverse respectivamente.
 
+## Forward
 
+### Per base sequence content
+
+En este campo se ha obtenido error y, tras ver el gráfico, parece que las desviaciones se crean sobretodo al inicio y en menor medida al final. Esto personalmente no creo que sea muy problemático ya que la distorsión se encuentra muy localizada.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Forw_perbaseseqcontent.jpg)
+
+### Sequence lenght distribution
+
+Vemos que el ancho margen de longitud de secuencia se debe a que, aunque la inmensa mayoría se centre en el rango de 100-101, hay algún resultado para la longitud de 35 bp.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Forw_seqlenghtdistrib.jpg)
+
+### Sequence duplication levels
+
+Tras examinar los recursos acerca de las causas de este evento, podría determinarse que en parte es causado por ser datos provinientes de una librería RNA-Seq. A modo de intentar ver transcripciones de baja expresión, se sobresecuencia, generándose muchos duplicados.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Forw_seqduplevels.jpg)
+
+### Overrepresented sequences
+
+La secuencia ACCTTAGGCAACCTGGTGGTCCCCCGCTCCCGGGAGGTCACCATATTGAT se ha obtenido hasta en 47969 ocasiones. Sobre este evento creo que no debería ser relevante, pero no estoy seguro.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Forw_overseq.jpg)
+
+### Conclusión
+
+A pesar de los eventos alarmantes dados, el análisis parece muy bueno para el resto de campos.
+
+## Reverse
+
+### Per base sequence quality
+
+Este evento salta como error, sin embargo, el gráfico sólo se ve aparentemente alterado en la primera base. Esto hace pensar que probablemente sea un error muy concreto y no tanto como un problema en la secuencia.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Rever_perbaseseqquality.jpg)
+
+### Per base sequence content
+
+Este evento creo que es análogo a la obtenida en forward, es decir, una distorsión muy localizada a inicio y en menor medida al final del gráfico, pudiendo ser un error concreto a determinar.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Rever_perbaseseqcontent.jpg)
+
+### Sequence Length Distribution
+
+De nuevo, mismo error que en forward, de manera que la conclusión es la misma.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Rever_seqlenghtdistrib.jpg)
+
+### Sequence Duplication Levels
+
+Igual que en forward hay duplicación de secuencias, sin embargo, en reverse el resultado es algo mejor.
+
+![](C:/Users\asend\Desktop\MASTER%20BYB\Anàlisi%20Dades%20Òmiques\master-omics\U01\figures/1_2_Rever_seqduplevels.jpg)
+
+### Conclusión
+
+En reverse se denotan casi los mismos eventos negativos del análisis de control de calidad que en forward. Aunque en reverse no obtenemos error en secuencias sobrerepresentadas (no hay) y se observa una mejoría en otros de los campos del análisis, si que vemos un empeoramiento en la calidad del inicio de la secuencia.
+
+Más allá de eso, tanto forward como reverse parecen cumplir de forma general el quality check de FastQC, aunque se podrían aplicar medidas de preprocesado para mejorar la calidad.
