@@ -26,8 +26,9 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 
 BiocManager::install(c("SummarizedExperiment"))
-
-
+BiocManager::install("POMA")
+install.packages("ggtext")
+install.packages("magrittr")
 ```
 
 ```{r libraries, include=FALSE}
@@ -35,6 +36,9 @@ BiocManager::install(c("SummarizedExperiment"))
 
 library(knitr)
 library(SummarizedExperiment)
+library(POMA)
+library(ggtext)
+library(magrittr)
 ```
 
 # Exercici 1. Exploració multivariant d'un dataset de metabolòmica
@@ -57,6 +61,7 @@ Per tant, els objectius d'aquest exercici es poden resumir en:
 
 ## Mètodes {#metodes}
 
+### Construcció del contenidor i selecció de mostres
 Es visualitzen els conjunts de dades proporcionats:
 
 ```{r input, echo=FALSE}
@@ -119,25 +124,90 @@ all(colnames(se) == rownames(colData(se))) # els noms de les columnes a la
 
 Finalment es fa una ullada general a les diferents entrades de se:
 
-```{r 6}
+```{r 6, echo=FALSE}
 assay(se)[1:5, 1:5]
 head(rowData(se))
 head(colData(se))
 ```
 
-Ara s'obté un subconjunt de 50 mostres que contenen casos i controls a parts iguals anomenat se_sub:
-```{r}
+Es crea un subconjunt de 50 mostres que contenen casos i controls a parts iguals anomenat "se_sub". Aquest serà l'objecte de l'anàlisi per PCA.
+
+```{r 7}
+se_sub
 table(colData(se_sub)$group)
 ```
 
-Per fer-ho, primer s'han guardat els noms de les mostres que corresponen al grup "Cases" a una variable i les que corresponen al grup "Control" en una altra, obtenint dos vectors amb els noms de les mostres per cada grup. Si s'examinen aquests vectors es pot veure com cadascun conté 30 elements, de manera que en total son 60 registres que de base ja estan dividits de forma equitativa.
+Per fer aquest subconjunt, primer s'han guardat els noms de les mostres que corresponen al grup "Cases" a una variable i les que corresponen al grup "Control" en una altra, obtenint dos vectors amb els noms de les mostres per cada grup. Si s'examinen aquests vectors es pot veure com cadascun conté 30 elements, de manera que en total son 60 registres que de base ja estan dividits de forma equitativa.
 
 Es determina la llavor per randomitzar, que en aquest cas és la 223, i s'escullen 25 mostres de cada llistat aleatòriament. S'uneixen les dues mostres de 25 de cada grup i es tornen a mesclar. Per acabar, a partir de l'objecte original se, s'agafen tots els registres corresponents als noms de les mostres que hem seleccionat i es configura un nou objecte se_sub amb 50 mostres dividides equitativament entre els dos grups.
 
 Les mostres seleccionades són:
-```{r}
+```{r 8, echo=FALSE}
 sel_samples
 ```
+
+### Preparació de les dades
+
+Abans de fer l'anàlisi per PCA, cal fer una sèrie de comprovacions i modificacions al subconjunt d'estudi per poder treballar amb ell.
+
+S'ha vist que hi ha valors perduts, per tant el primer pas serà tractar-los, tenint en compte que si un metabolit supera el 20% de valors faltants s'eliminarà del dataset i, en canvi, si el percentatge és inferior al 20% es mantindrà en el dataset i s'imputen els valors mitjançant un algoritme com KNN.
+
+Seguidament es realitzarà una escalada de les dades. Aquest procés gairebé sempre s'ha de fer abans d'un anàlisi de components principals. En aquest cas només passant la vista pels petits resums anteriors ja es pot veure com les dades varien lo suficient per considerar una normalització.
+
+El penúltim aspecte a determinar és si cal o no transformar les dades. Per veure-ho, es generaran i revisaran gràfics per veure asimetries.
+
+Finalment, es determinarà si hi ha outliers o valors que s'allunyen en excés de la tendència general.
+
+Tot aquest procés es pot fer seguint el workflow de referència del paquet POMA [@poma_workflow]
+
+Abans però es realitza un canvi en la naturalesa de la variable "group" que al passar-la a factor ajudarà a la comprensió dels gràfics.
+
+```{r 9}
+colData(se_sub)$group <- factor(colData(se_norm)$group)
+```
+
+Ara continuem amb la primera fita, fer la retirada i/o imputació dels valors NA:
+
+```{r 10}
+se_imp <- PomaImpute(se_sub, method = "knn", zeros_as_na = TRUE, 
+                     remove_na = TRUE, cutoff = 20)
+```
+
+Es pot veure com no s'ha retirat cap valor. A continuació es normalitzen les dades.
+
+```{r 11}
+se_norm <- PomaNorm(se_imp, method = "log_pareto")
+```
+
+Degut a que no es possible representar "features" amb el gràfic PomaDensity es fa servir "samples" per visualitzar el guany de normalitzar les dades.
+
+```{r 12, out.width='65%', echo=FALSE}
+PomaBoxplots(se_imp, x = "samples")
+```
+
+```{r 12b, out.width='65%', echo=FALSE}
+PomaBoxplots(se_norm, x = "samples")
+```
+
+```{r 13, out.width='65%', echo=FALSE}
+PomaDensity(se_imp, x = "samples")
+```
+
+```{r 13b, out.width='65%', echo=FALSE}
+PomaDensity(se_norm, x = "samples")
+```
+
+L'escalat de les dades ha funcionat força bé tal i com es veu en els gràfics. No es valora per tant transformar les dades.
+
+```{r 14, out.width='65%', echo=FALSE}
+PomaOutliers(se_norm)$polygon_plot
+```
+
+Tampoc es veuen outliers clars, tots els punts es troben relacionats. Es destaca una clara diferència entre casos i controls i, en cadascun d'ells, hi ha una divisió dels punts en dues bandes superior i inferior clarament diferenciada. 
+
+### Anàlisi mitjançant PCA
+
+
 
 ## Resultats {#resultats}
 
