@@ -1,0 +1,212 @@
+---
+title: "PEC 1 - Anàlisi de dades Òmiques"
+author: "Alejandro Sendín Emiliano"
+date: "`r Sys.Date()`"
+header-includes:
+  - \usepackage{float}
+bibliography: OM-1-bib.bib
+link-citations: true
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+# knitr options
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = "center")
+```
+
+```{r install, eval=FALSE ,include=FALSE}
+# Install packages
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install(c("SummarizedExperiment"))
+
+
+```
+
+```{r libraries, include=FALSE}
+# Load packages
+
+library(knitr)
+library(SummarizedExperiment)
+```
+
+# Exercici 1. Exploració multivariant d'un dataset de metabolòmica
+
+## Introducció i objectius {#introduccio}
+
+Es proporcionen tres conjunts de dades provinents de metabolòmica: "assay.csv", "sample_metadata.csv" i "feature_metadata.csv". El primer és una matriu d'intensitats amb metabòlits i mostres, el segon arxiu conté informació fenotípica i tècnica de les mostres i, el tercer, inclou informació més detallada de cada metabòlit.
+
+Aquestes dades de forma aïllada és difícil visualitzar-les i analitzar-les. Amb l'ajuda de Bioconductor, es pretén elaborar un objecte que contingui tota aquesta informació. Com amb qualsevol conjunt de dades, será necessari realitzar un pre-processat d'aquesta informació. Aquest procés va lligat al de la reducció de la dimensionalitat de les dades, el qual es realitzará seguint el métode d'anàlisi de components principals (PCA).
+
+Tot i que l'anàlisi per PCA sigui molt útil i popular, a l'última part de l'exercici es valoraran altres tècniques de reducció de dades.
+
+Per tant, els objectius d'aquest exercici es poden resumir en:
+
+> -   Construir un contenidor adequat amb les dades proporcionades
+> -   Crear un subconjunt de treball
+> -   Preparar les dades per al seu anàlisi
+> -   Realitzar un anàlisi PCA
+> -   Comparar altres mètodes de reducció de la dimensió
+
+## Mètodes {#metodes}
+
+Es visualitzen els conjunts de dades proporcionats:
+
+```{r input, echo=FALSE}
+# no mostra codi, si executa codi
+assay_data <- read.csv("assay.csv", row.names = 1)
+sample_metadata <- read.csv("sample_metadata.csv", row.names = 1)
+feature_metadata <- read.csv("feature_metadata.csv", row.names = 1)
+```
+
+```{r 1, echo=FALSE}
+kable(head(assay_data), caption = "Primers 6 registres d'assay")
+```
+
+Tal i com es veu a la taula, assay conté els metabòlits a les files i les columnes corresponen a les diferents mostres. També es possible veure que tenim valors NA. Posteriorment es gestionaran.
+
+```{r 2, echo=FALSE}
+kable(head(sample_metadata), caption = "Primers 6 registres de sample_metadata")
+```
+
+Sample_metadata conté tantes files com mostres i les columnes són: group, batch, sex, age, bmi i cholesterol. És a dir, en aquest dataset cada mostra es troba contextualitzada per 6 variables diferents. 
+
+```{r 3, echo=FALSE}
+kable(head(feature_metadata), caption = "Primers 6 registres de feature_metadata")
+```
+
+Finalment el dataset feature_metadata integra els diferents metabòlits a les files i les columnes són les variables que els defineixen, en aquest cas: metabolite_name, class i platform.
+
+Veient els tipus de dades que tenim, sembla natural fer servir el tipus de contenidor **SummarizedExperiment** provinent de Bioconductor. Aquest paquet ofereix un contenidor que allotja els aspectes essencials dels experiments individuals en un únic objecte que coordina les dades i les metadades durant les operacions de subconjunt i reordenació. SummarizedExperiment és un contenidor semblant a una matriu on les **files representen característiques d'interès** (per exemple, gens, transcrits, exons, etc.) i les **columnes representen mostres** [@carpentries_summarizedexperiment].
+
+Per crear l'objecte **SummarizedExperiment** fem servir el codi següent:
+
+```{r se}
+se <- SummarizedExperiment(
+  assays = list(counts = assay_data), # df assay com a matriu principal
+  colData = sample_metadata, # info de les mostres
+  rowData = feature_metadata # info dels metabòlits
+)
+se
+```
+
+En principi sembla que encaixa amb les taules dels diferents dataframes descrits anteriorment. 
+
+Comprovem que les dades estiguin correctament alineades:
+
+```{r 4}
+nrow(assay(se)) == nrow(rowData(se)) # el nº de files a la matriu de dades ha de 
+# ser igual que el número de files de feature_metadata
+ncol(assay(se)) == nrow(colData(se)) # el nº de columnes a la matriu de dades ha 
+#de ser igual que el número de files de sample_metadata
+```
+
+També comprovem que els noms coincideixin:
+
+```{r 5}
+all(rownames(se) == rownames(rowData(se))) # els noms de les files a la matriu 
+# de dades equivalen als els de feature_metadata
+all(colnames(se) == rownames(colData(se))) # els noms de les columnes a la 
+# matriu de dades equivalen als els de les files de sample_metadata
+```
+
+Finalment es fa una ullada general a les diferents entrades de se:
+
+```{r 6}
+assay(se)[1:5, 1:5]
+head(rowData(se))
+head(colData(se))
+```
+
+Ara s'obté un subconjunt de 50 mostres que contenen casos i controls a parts iguals anomenat se_sub:
+```{r}
+table(colData(se_sub)$group)
+```
+
+Per fer-ho, primer s'han guardat els noms de les mostres que corresponen al grup "Cases" a una variable i les que corresponen al grup "Control" en una altra, obtenint dos vectors amb els noms de les mostres per cada grup. Si s'examinen aquests vectors es pot veure com cadascun conté 30 elements, de manera que en total son 60 registres que de base ja estan dividits de forma equitativa.
+
+Es determina la llavor per randomitzar, que en aquest cas és la 223, i s'escullen 25 mostres de cada llistat aleatòriament. S'uneixen les dues mostres de 25 de cada grup i es tornen a mesclar. Per acabar, a partir de l'objecte original se, s'agafen tots els registres corresponents als noms de les mostres que hem seleccionat i es configura un nou objecte se_sub amb 50 mostres dividides equitativament entre els dos grups.
+
+Les mostres seleccionades són:
+```{r}
+sel_samples
+```
+
+## Resultats {#resultats}
+
+## Discussió {#discussio}
+
+# Exercici 2. Revisió d'un article
+
+# Apèndix: codi R utilitzat {#apendix}
+
+```{r app, eval=FALSE}
+# input per SummarizedExperiment
+# s'obté cada conjunt de dades per separat
+assay_data <- read.csv("assay.csv", row.names = 1)
+sample_metadata <- read.csv("sample_metadata.csv", row.names = 1)
+feature_metadata <- read.csv("feature_metadata.csv", row.names = 1)
+
+# taula del df assaig
+kable(head(assay_data), caption = "Primers 6 registres d'assay")
+
+# taula del df mostres
+kable(head(sample_metadata), caption = "Primers 6 registres de sample_metadata")
+
+# taula del df de feature
+kable(head(feature_metadata), caption = "Primers 6 registres de feature_metadata")
+
+#construcció i visualització de l'objecte SE
+se <- SummarizedExperiment(
+  assays = list(counts = assay_data), # df assay com a matriu principal
+  colData = sample_metadata, # info de les mostres
+  rowData = feature_metadata # info dels metabòlits
+)
+se
+
+# comprovacions de igual nº files/col
+nrow(assay(se)) == nrow(rowData(se)) # el nº de files a la matriu de dades ha de 
+# ser igual que el número de files de feature_metadata
+ncol(assay(se)) == nrow(colData(se)) # el nº de columnes a la matriu de dades ha 
+#de ser igual que el número de files de sample_metadata
+
+# comprovació de noms iguals entre diferents entrades del SE
+all(rownames(se) == rownames(rowData(se))) # els noms de les files a la matriu 
+# de dades equivalen als els de feature_metadata
+all(colnames(se) == rownames(colData(se))) # els noms de les columnes a la 
+# matriu de dades equivalen als els de les files de sample_metadata
+
+# visualització dades del SE
+assay(se)[1:5, 1:5]
+head(rowData(se))
+head(colData(se))
+
+# s'obtenen les mostres de 25 casos i 25 controls
+# primer es guarden els noms de les mostres corresponents a "Case"
+casos <- colnames(se)[colData(se)$group == "Case"]
+# i es guarden en una altra variable els noms de mostres caracteritzades pel grup "Control"
+controls <- colnames(se)[colData(se)$group == "Control"]
+
+set.seed(223) # s'indica la llavor per fer la random
+# s'escullen 25 mostres random de casos
+sel_casos <- sample(casos, 25)
+# s'escullen 25 mostres random de controls
+sel_controls <- sample(controls, 25)
+# genera les mostres i les mescla de nou
+sel_samples <- sample(c(sel_casos, sel_controls))
+# finalment es crea el subset a partir de SE, incorporant les columnes random
+se_sub <- se[, sel_samples]
+
+table(colData(se_sub)$group) # es comprova que s'ha fet la partició correctament
+
+sel_samples
+```
+
+# Referències
