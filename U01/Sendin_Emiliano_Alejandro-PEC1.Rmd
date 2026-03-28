@@ -29,6 +29,7 @@ BiocManager::install(c("SummarizedExperiment"))
 BiocManager::install("POMA")
 install.packages("ggtext")
 install.packages("magrittr")
+install.packages("umap")
 ```
 
 ```{r libraries, include=FALSE}
@@ -39,6 +40,10 @@ library(SummarizedExperiment)
 library(POMA)
 library(ggtext)
 library(magrittr)
+library(dplyr)
+library(limma)
+library(ggplot2)
+library(umap)
 ```
 
 # Exercici 1. Exploració multivariant d'un dataset de metabolòmica
@@ -132,7 +137,18 @@ head(colData(se))
 
 Es crea un subconjunt de 50 mostres que contenen casos i controls a parts iguals anomenat "se_sub". Aquest serà l'objecte de l'anàlisi per PCA.
 
-```{r 7}
+```{r 7, echo=FALSE}
+casos <- colnames(se)[colData(se)$group == "Case"]
+controls <- colnames(se)[colData(se)$group == "Control"]
+
+set.seed(223)
+sel_casos <- sample(casos, 25)
+sel_controls <- sample(controls, 25)
+sel_samples <- sample(c(sel_casos, sel_controls))
+se_sub <- se[, sel_samples]
+```
+
+```{r 8}
 se_sub
 table(colData(se_sub)$group)
 ```
@@ -142,7 +158,7 @@ Per fer aquest subconjunt, primer s'han guardat els noms de les mostres que corr
 Es determina la llavor per randomitzar, que en aquest cas és la 223, i s'escullen 25 mostres de cada llistat aleatòriament. S'uneixen les dues mostres de 25 de cada grup i es tornen a mesclar. Per acabar, a partir de l'objecte original se, s'agafen tots els registres corresponents als noms de les mostres que hem seleccionat i es configura un nou objecte se_sub amb 50 mostres dividides equitativament entre els dos grups.
 
 Les mostres seleccionades són:
-```{r 8, echo=FALSE}
+```{r 9, echo=FALSE}
 sel_samples
 ```
 
@@ -152,60 +168,218 @@ Abans de fer l'anàlisi per PCA, cal fer una sèrie de comprovacions i modificac
 
 S'ha vist que hi ha valors perduts, per tant el primer pas serà tractar-los, tenint en compte que si un metabolit supera el 20% de valors faltants s'eliminarà del dataset i, en canvi, si el percentatge és inferior al 20% es mantindrà en el dataset i s'imputen els valors mitjançant un algoritme com KNN.
 
-Seguidament es realitzarà una escalada de les dades. Aquest procés gairebé sempre s'ha de fer abans d'un anàlisi de components principals. En aquest cas només passant la vista pels petits resums anteriors ja es pot veure com les dades varien lo suficient per considerar una normalització.
+Seguidament es realitzarà una escalada de les dades. Aquest procés gairebé sempre s'ha de fer abans d'un anàlisi de components principals. En aquest cas passant la vista pels petits resums anteriors es pot veure com les dades varien força segons la mostra o metabòlit.
 
 El penúltim aspecte a determinar és si cal o no transformar les dades. Per veure-ho, es generaran i revisaran gràfics per veure asimetries.
 
 Finalment, es determinarà si hi ha outliers o valors que s'allunyen en excés de la tendència general.
 
-Tot aquest procés es pot fer seguint el workflow de referència del paquet POMA [@poma_workflow]
+Tot aquest procés es pot fer seguint el workflow de referència del paquet POMA [@castellano2021pomashiny]
 
 Abans però es realitza un canvi en la naturalesa de la variable "group" que al passar-la a factor ajudarà a la comprensió dels gràfics.
 
-```{r 9}
-colData(se_sub)$group <- factor(colData(se_norm)$group)
+```{r 10}
+colData(se_sub)$group <- factor(colData(se_sub)$group)
 ```
 
 Ara continuem amb la primera fita, fer la retirada i/o imputació dels valors NA:
 
-```{r 10}
+```{r 11}
 se_imp <- PomaImpute(se_sub, method = "knn", zeros_as_na = TRUE, 
                      remove_na = TRUE, cutoff = 20)
 ```
 
 Es pot veure com no s'ha retirat cap valor. A continuació es normalitzen les dades.
 
-```{r 11}
+```{r 12}
 se_norm <- PomaNorm(se_imp, method = "log_pareto")
 ```
 
 Degut a que no es possible representar "features" amb el gràfic PomaDensity es fa servir "samples" per visualitzar el guany de normalitzar les dades.
 
-```{r 12, out.width='65%', echo=FALSE}
+```{r 13, fig.pos='H', fig.cap="Boxplot de dades no escalades", out.width='65%', echo=FALSE}
 PomaBoxplots(se_imp, x = "samples")
 ```
 
-```{r 12b, out.width='65%', echo=FALSE}
+```{r 13b, fig.pos='H', fig.cap="Boxplot de dades escalades", out.width='65%', echo=FALSE}
 PomaBoxplots(se_norm, x = "samples")
 ```
 
-```{r 13, out.width='65%', echo=FALSE}
+```{r 14, fig.pos='H', fig.cap="Gràfic de densitats amb dades no escalades", out.width='65%', echo=FALSE}
 PomaDensity(se_imp, x = "samples")
 ```
 
-```{r 13b, out.width='65%', echo=FALSE}
+```{r 14b, fig.pos='H', fig.cap="Gràfic de densitats amb dades escalades", out.width='65%', echo=FALSE}
 PomaDensity(se_norm, x = "samples")
 ```
 
 L'escalat de les dades ha funcionat força bé tal i com es veu en els gràfics. No es valora per tant transformar les dades.
 
-```{r 14, out.width='65%', echo=FALSE}
+```{r 15, fig.pos='H', fig.cap="Gràfic de visualització d'outliers", out.width='65%', echo=FALSE}
 PomaOutliers(se_norm)$polygon_plot
 ```
 
-Tampoc es veuen outliers clars, tots els punts es troben relacionats. Es destaca una clara diferència entre casos i controls i, en cadascun d'ells, hi ha una divisió dels punts en dues bandes superior i inferior clarament diferenciada. 
+Tampoc es veuen outliers clars, tots els punts es troben relacionats. Es destaca una clara diferència entre casos i controls i, en cadascun d'ells, hi ha una divisió dels punts en dues bandes superior i inferior clarament diferenciada. Per aquest motiu, es revisa que no hi hagi efecte batch en les dades. Per fer-ho fàcil, es col·loca la columna "batch" la primera a colData i es modifica el seu tipus de variable a factor, de manera que el gràfic de POMA agafi la columna "batch" com la referència per fer el gràfic i així veure si hi ha diferències:
+
+```{r 16, fig.pos='H', fig.cap="Gràfic de visualització de l'efecte batch", out.width='65%', echo=FALSE}
+# es col·loca batch en primer lloc a colData
+colData(se_norm) <- colData(se_norm) %>% 
+  as.data.frame() %>%
+  relocate(group, .after = batch) %>%
+  DataFrame()
+
+# es canvia a factor
+colData(se_norm)$batch <- factor(colData(se_norm)$batch)
+
+# es crea el nou gràfic
+PomaOutliers(se_norm)$polygon_plot
+```
+
+Clarament l'efecte batch té un gran impacte en les dades, les divideix en dos grups totalment separats. De fet, fent una taula de freqüències de SummarizedExperiment original obtenim una divisió perfecta entre casos i controls i batch1 i batch2.
+
+```{r 17}
+table(colData(se)$batch, colData(se)$group)
+```
+
+Repetim la taula pel subconjunt d'estudi i es comprova que la dinàmica és igual.
+
+```{r 18}
+table(colData(se_norm)$batch, colData(se_norm)$group)
+```
+
+Per fortuna, un element de "batch" no s'associa exclusivament o en gran part a un element sol de "group", ja que llavors serien la mateixa variable.
+
+Ara per corregir l'efecte batch es fa servir la funció "removeBatchEffect".
+
+```{r 19, echo = false}
+group <- colData(se_norm)$group
+sex <- colData(se_norm)$sex
+age <- colData(se_norm)$age
+bmi <- colData(se_norm)$bmi
+cholesterol <- colData(se_norm)$cholesterol
+
+mat <- assay(se_norm)
+batch <- colData(se_norm)$batch
+design <- model.matrix(~ group + sex + age + bmi + cholesterol)
+```
+
+```{r 20}
+se_nobatch <- removeBatchEffect(mat, batch = batch, design = design)
+
+assay(se_norm, "nobatch") <- se_nobatch
+```
+
+Ara s'introdueix una nova variable, se_tmp, que sigui igual que se_norm però amb les dades tractades per eliminar el batch:
+
+```{r 21}
+se_tmp <- se_norm
+assay(se_tmp) <- assay(se_norm, "nobatch")
+```
+
+Es realitza de nou el gràfic d'outliers per visualitzar que s'ha eliminat l'efecte batch:
+
+```{r 22, fig.pos='H', fig.cap="Gràfic de visualització: efecte batch eliminat", out.width='65%', echo=FALSE}
+PomaOutliers(se_tmp)$polygon_plot
+```
+
+En quant a la variable batch sembla que s'ha corregit l'efecte. Es retornen les columnes group i batch al seu lloc i es torna a repetir el gràfic amb la variable group.
+
+```{r 23, echo=FALSE}
+# es canvia la columna
+colData(se_norm) <- colData(se_norm) %>% 
+  as.data.frame() %>%
+  relocate(batch, .after = group) %>%
+  DataFrame()
+
+# es recrea la variable per conservar el canvi de columna
+se_tmp <- se_norm
+assay(se_tmp) <- assay(se_norm, "nobatch")
+```
+
+```{r 24, fig.pos='H', fig.cap="Gràfic de visualització: grups correctament separats", out.width='65%', echo=FALSE}
+PomaOutliers(se_tmp)$polygon_plot
+```
+
+Efectivament, s'ha conservat la divisió per casos i controls mentre que s'ha eliminat l'efecte batch.
+
+De manera que el subconjunt d'estudi per fer l'anàlisi de PCA serà **se_tmp**.
 
 ### Anàlisi mitjançant PCA
+
+L'anàlisi de PCA es por fer mitjançant **PomaPCA** de nou de forma fàcil.
+
+```{r 25, echo=FALSE}
+pca <- PomaPCA(
+  data = se_tmp,
+  outcome = "group",
+  center = TRUE,
+  scale = FALSE,
+  ncomp = 4,
+  labels = FALSE,
+  ellipse = TRUE
+)
+```
+
+S'obtenen els valors de variança explicada per cada component:
+
+```{r 26}
+pca$eigenvalues
+```
+
+S'obté un percentatge de variança explicada del 73,76% només amb la primera component. La suma de la primera i la segona component explicarien gairebé el 90% del total de la variança.
+
+Representem gráficament les dues primeres components:
+
+```{r 27, fig.pos='H', fig.cap="Gràfic de representació de PC1 i PC2", out.width='65%', echo=FALSE}
+pca$factors_plot
+```
+
+Es pot veure una distribució igual que la descrita amb el gràfic dels outliers. La variable "group" conté un 57,28% de la variabilitat en la primera component, cosa que determina en gran part l'estructura gràfica obtinguda.
+
+També es podrien obtenir els "loadings" o contribucions de cada metabòlit a cada component o, fins i tot, representar un "scree plot":
+
+```{r 28, fig.pos='H', fig.cap="Scree plot", out.width='65%', echo=FALSE}
+pca$eigenvalues_plot
+```
+
+Degut als resultats s'agafa la primera i segona component per descriure el total de les dades, ja que conjuntament explicarien un 89,3% de la variabilitat.
+
+Si analitzem els "loadings", es pot obtenir un llistat de les variables (metabòlits) amb un component més gran (més contribució) en la primera component.
+
+```{r 29}
+loads <- pca$loadings
+var_loads <- loads[order(abs(loads$PC1), decreasing = TRUE), ]
+head(var_loads[,1:2], 10)
+```
+
+### Comparació amb altres mètodes
+
+Es fa servir **UMAP** com a mètode alternatiu per reduir la dimensió de les dades del subconjunt **se_tmp**. Per fer-ho, s'utilitza la funció **umap** sobre la matriu de dades de l'assaig, obtenint un component nou anomenat "layout" que conté les coordenades per poder visualitzar les dades obtingudes.
+
+Es realiza doncs una execució de la funció umap sobre X (matriu d'assaig definida de se_tmp), es crea un dataframe amb les dades de layout i de la variable de colData "group" i es visualitza a través d'un gràfic de ggplot2.
+
+```{r 30, echo=FALSE}
+X <- t(assay(se_tmp))
+
+set.seed(223)
+um <- umap(X)
+umap_df <- data.frame(
+  Dim1 = um$layout[, 1],
+  Dim2 = um$layout[, 2],
+  group = colData(se_tmp)$group
+)
+```
+
+```{r 30, fig.pos='H', fig.cap="UMAP: Coordenades segons la variable group", out.width='65%', echo=FALSE}
+ggplot(umap_df, aes(x = Dim1, y = Dim2, color = group)) +
+  geom_point(size = 3)
+```
+
+UMAP agrupa aquells punts que considera més propers aplicant k-nn, que per defecte serà k = 2. S'observen estructures similars a les obtingudes mitjançant l'anàlisi per PCA. Si més no, en aquest cas és útil per veure la distància que hi ha entre els casos i control. En aquest cas també s'observa certa distància no només a nivell horitzontal si no també verticalment entre els dos grups. Finalment, destacar que entre grups hi ha 2 subgrups, de manera que podria haver un subtipus biològic que marqués la diferència dins dels propis control i casos.
+
+Per tant, PCA i UMAP tot i tenir semblances en la funcionalitat, ambdós generen uns outputs que poden interpretar-se de formes diferents i/o obtenir conclusions variables. La idea és poder combinar les dues tècniques per poder tenir una visió ampliada de les dades i descobrir patrons desapercebuts.
+
+### Interpretació global de l'anàlisi
 
 
 
@@ -277,6 +451,119 @@ se_sub <- se[, sel_samples]
 table(colData(se_sub)$group) # es comprova que s'ha fet la partició correctament
 
 sel_samples
+
+# canvi tipus variable group a factor
+colData(se_sub)$group <- factor(colData(se_sub)$group)
+
+# retirada valors NA
+se_imp <- PomaImpute(se_sub, method = "knn", zeros_as_na = TRUE, 
+                     remove_na = TRUE, cutoff = 20)
+
+# normalització de dades
+se_norm <- PomaNorm(se_imp, method = "log_pareto")
+
+# boxplots abans i després d'escalar dades
+PomaBoxplots(se_imp, x = "samples")
+PomaBoxplots(se_norm, x = "samples")
+
+# gràfics de densitats abans i després d'escalar dades
+PomaDensity(se_imp, x = "samples")
+PomaDensity(se_norm, x = "samples")
+
+# gràfic outliers
+PomaOutliers(se_norm)$polygon_plot
+
+# es revisa si hi ha batch effect
+# es col·loca batch en primer lloc a colData
+colData(se_norm) <- colData(se_norm) %>% 
+  as.data.frame() %>%
+  relocate(group, .after = batch) %>%
+  DataFrame()
+# es canvia a factor
+colData(se_norm)$batch <- factor(colData(se_norm)$batch)
+# es crea el nou gràfic
+PomaOutliers(se_norm)$polygon_plot
+
+# taules de frecuències entre group i batch en se i se_norm
+table(colData(se)$batch, colData(se)$group)
+table(colData(se_norm)$batch, colData(se_norm)$group)
+
+# funció removeBatchEffect
+# definició variables
+group <- colData(se_norm)$group
+sex <- colData(se_norm)$sex
+age <- colData(se_norm)$age
+bmi <- colData(se_norm)$bmi
+cholesterol <- colData(se_norm)$cholesterol
+
+mat <- assay(se_norm)
+batch <- colData(se_norm)$batch
+design <- model.matrix(~ group + sex + age + bmi + cholesterol)
+
+# aplicació de la funció
+se_nobatch <- removeBatchEffect(mat, batch = batch, design = design)
+
+# addició a se_norm del conjunt sense batch effect
+assay(se_norm, "nobatch") <- se_nobatch
+
+# es crea se_tmp com l'objecte "SumExp" amb l'efecte batch eliminat
+se_tmp <- se_norm
+assay(se_tmp) <- assay(se_norm, "nobatch")
+
+# es comprova que se_tmp no presenta efecte batch
+PomaOutliers(se_tmp)$polygon_plot
+
+# es canvia la columna de lloc de nou
+colData(se_norm) <- colData(se_norm) %>% 
+  as.data.frame() %>%
+  relocate(batch, .after = group) %>%
+  DataFrame()
+
+# es recrea la variable per conservar el canvi de columna
+se_tmp <- se_norm
+assay(se_tmp) <- assay(se_norm, "nobatch")
+
+# es repeteix el gràfic amb els valors de "group" per comprovar que es segueix conservant les diferències.
+PomaOutliers(se_tmp)$polygon_plot
+
+# analisis pca amb POMA
+pca <- PomaPCA(
+  data = se_tmp,
+  outcome = "group",
+  center = TRUE,
+  scale = FALSE,
+  ncomp = 4,
+  labels = FALSE,
+  ellipse = TRUE
+)
+
+pca$eigenvalues # % de variança explicada per cada component
+
+pca$factors_plot # representació 2 primers components
+
+pca$eigenvalues_plot # scree plot
+
+# llistat de les variables (metabòlits) amb un component més gran
+loads <- pca$loadings
+var_loads <- loads[order(abs(loads$PC1), decreasing = TRUE), ]
+head(var_loads[,1:2], 10)
+
+# anàlisi UMAP
+# s'obté la matriu principal
+X <- t(assay(se_tmp)) 
+
+set.seed(223)
+um <- umap(X) # fem UMAP
+
+# la funció umap dona la matriu "layout" amb coordenades que es poden fer servir
+# per visualitzar les dades
+umap_df <- data.frame(
+  Dim1 = um$layout[, 1],
+  Dim2 = um$layout[, 2],
+  group = colData(se_tmp)$group
+)
+
+# es representa gràficament
 ```
 
 # Referències
