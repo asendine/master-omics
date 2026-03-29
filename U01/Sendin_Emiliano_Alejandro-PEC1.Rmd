@@ -67,6 +67,7 @@ Per tant, els objectius d'aquest exercici es poden resumir en:
 ## Mètodes {#metodes}
 
 ### Construcció del contenidor i selecció de mostres
+
 Es visualitzen els conjunts de dades proporcionats:
 
 ```{r input, echo=FALSE}
@@ -304,6 +305,8 @@ Efectivament, s'ha conservat la divisió per casos i controls mentre que s'ha el
 
 De manera que el subconjunt d'estudi per fer l'anàlisi de PCA serà **se_tmp**.
 
+## Resultats {#resultats}
+
 ### Anàlisi mitjançant PCA
 
 L'anàlisi de PCA es por fer mitjançant **PomaPCA** de nou de forma fàcil.
@@ -334,11 +337,40 @@ Representem gráficament les dues primeres components:
 pca$factors_plot
 ```
 
-Es pot veure una distribució igual que la descrita amb el gràfic dels outliers. La variable "group" conté un 57,28% de la variabilitat en la primera component, cosa que determina en gran part l'estructura gràfica obtinguda.
+Es pot veure una distribució igual que la descrita amb el gràfic dels outliers. La variable "group" comporta un 57,28% de la variabilitat en la primera component, cosa que determina en gran part l'estructura gràfica obtinguda. La segona component separa les variables en subgrups. Per saber quina variable està separant en aquests subgrups, el més ràpid és crear un PCA normal amb la funció prcomp() i graficar amb colors segons la variable amb un bucle:
+
+```{r 28, echo=FALSE}
+# es crea el pca amb prcomp
+pca2 <- prcomp(t(assay(se_tmp)), scale. = FALSE)
+
+# es crea un df per fer els gràfics
+pca2_df <- data.frame(
+  PC1 = pca2$x[,1],
+  PC2 = pca2$x[,2],
+  colData(se_tmp)
+)
+```
+
+```{r 29, fig.pos='H', fig.cap="Visualització per color de les variables", out.width='65%', warning=FALSE, echo=FALSE}
+# vector amb les diferents variables
+var <- c("group", "batch", "sex", "age", "bmi", "cholesterol")
+
+# dibueixem els gràfics
+for (v in var) {
+  print(
+    ggplot(pca2_df, aes_string(x = "PC1", y = "PC2", color = v)) +
+      geom_point(size = 3) +
+      ggtitle(paste("Colored by", v)) +
+      theme_minimal()
+  )
+}
+```
+
+Es pot veure com la variable responsable de dividir les dades a nivell vertical és "sex", generant un 12,1% de variabilitat en la segona component. Altres variables com "bmi" o "cholesterol" tenen els seus valors també molt dividits a nivell horitzontal, és a dir, els controls aparentment tenen valors de bmi i colesterol més baixos.
 
 També es podrien obtenir els "loadings" o contribucions de cada metabòlit a cada component o, fins i tot, representar un "scree plot":
 
-```{r 28, fig.pos='H', fig.cap="Scree plot", out.width='65%', echo=FALSE}
+```{r 30, fig.pos='H', fig.cap="Scree plot", out.width='65%', echo=FALSE}
 pca$eigenvalues_plot
 ```
 
@@ -346,7 +378,7 @@ Degut als resultats s'agafa la primera i segona component per descriure el total
 
 Si analitzem els "loadings", es pot obtenir un llistat de les variables (metabòlits) amb un component més gran (més contribució) en la primera component.
 
-```{r 29}
+```{r 31}
 loads <- pca$loadings
 var_loads <- loads[order(abs(loads$PC1), decreasing = TRUE), ]
 head(var_loads[,1:2], 10)
@@ -358,7 +390,7 @@ Es fa servir **UMAP** com a mètode alternatiu per reduir la dimensió de les da
 
 Es realiza doncs una execució de la funció umap sobre X (matriu d'assaig definida de se_tmp), es crea un dataframe amb les dades de layout i de la variable de colData "group" i es visualitza a través d'un gràfic de ggplot2.
 
-```{r 30, echo=FALSE}
+```{r 32, echo=FALSE}
 X <- t(assay(se_tmp))
 
 set.seed(223)
@@ -370,24 +402,30 @@ umap_df <- data.frame(
 )
 ```
 
-```{r 30, fig.pos='H', fig.cap="UMAP: Coordenades segons la variable group", out.width='65%', echo=FALSE}
+```{r 33, fig.pos='H', fig.cap="UMAP: Coordenades segons la variable group", out.width='65%', echo=FALSE}
 ggplot(umap_df, aes(x = Dim1, y = Dim2, color = group)) +
   geom_point(size = 3)
 ```
 
-UMAP agrupa aquells punts que considera més propers aplicant k-nn, que per defecte serà k = 2. S'observen estructures similars a les obtingudes mitjançant l'anàlisi per PCA. Si més no, en aquest cas és útil per veure la distància que hi ha entre els casos i control. En aquest cas també s'observa certa distància no només a nivell horitzontal si no també verticalment entre els dos grups. Finalment, destacar que entre grups hi ha 2 subgrups, de manera que podria haver un subtipus biològic que marqués la diferència dins dels propis control i casos.
+UMAP agrupa aquells punts que considera més propers aplicant k-nn, que per defecte serà k = 2. S'observen estructures similars a les obtingudes mitjançant l'anàlisi per PCA. Si més no, en aquest cas és útil per veure la distància que hi ha entre les dades, en especial la que es genera entre els casos i controls. En aquest cas també s'observa certa distància no només a nivell horitzontal si no també verticalment entre els dos grups. Aquesta distància podria ser la reflectida per la variable sexe, que amb un percentatge més baix influia la segona component a nivell vertical.
 
 Per tant, PCA i UMAP tot i tenir semblances en la funcionalitat, ambdós generen uns outputs que poden interpretar-se de formes diferents i/o obtenir conclusions variables. La idea és poder combinar les dues tècniques per poder tenir una visió ampliada de les dades i descobrir patrons desapercebuts.
 
-### Interpretació global de l'anàlisi
+## Interpretació global de l'anàlisi, discussió {#discussio}
 
+Les dades, un cop escalades, prenen una posició gràfica molt evident, és a dir, es distribueixen clarament per grups segons si són "casos" o "control" i, dins d'aquests grups, trobem subgrups formats probablement per l'acció d'altres paràmetres biològics com el sexe. També, amb l'efecte batch es podia apreciar una diferència total entre les dades clasificades com a batch1 i les que eren batch2. Finalment amb UMAP es pot visualitzar una més clara presentació de les dades i els subgrups, en les que les caracteritzades com a "casos" es presenten al quadrant inferior esquerre del gràfic mentre que les dades "control" prenen posició al quadrant superior dret.
 
+La classificació en casos o controls determina totalment la disposició de les dades, de fet, segons el gràfic de factors fet amb PomaPCA, la primera component separa en casos o controls amb un 57,3%. Si més no, a la segona component hem vist que la variable "sex" explica un 12,1% de variabilitat i divideix les dades a nivell vertical. Altres variables com el bmi o el colesterol tenen els seus valors màxims amb les mostres situades com a casos i els inferiors als controls. Això últim és important ja que podria ser doncs que les 3 variables ("group, "bmi" i "cholesterol") patissin certa colinealitat per representar de la mateixa manera les dades.
 
-## Resultats {#resultats}
+Al tractar-se d'un conjunt de dades contingut en un objecte de tipus S4 SummarizedExperiment, el seu anàlisi sembla més complex que el que es plantejaria amb un dataset qualsevol. Podria ser que no s'hagi interpretat bé els resultats obtinguts o que fins i tot la metodologia no sigui la correcta. El fet de tenir efecte batch ha generat també un tractament de les dades que podria no ser l'adequat. Per altra banda, els mètodes alternatius de reducció de la dimensió són totalment desconeguts i tampoc queda ben bé clar si s'han executat o interpretat bé. 
 
-## Discussió {#discussio}
+Degut al tipus de dades i la seva estructura, es podria plantejar un anàlisi de la linealitat, veure quines dades de colData realment són útils conservar.
 
 # Exercici 2. Revisió d'un article
+
+L'article a revisar és "Large-Scale Multi-omic Analysis of COVID-19 Severity" [@overmyer2021large].
+
+
 
 # Apèndix: codi R utilitzat {#apendix}
 
@@ -541,6 +579,29 @@ pca$eigenvalues # % de variança explicada per cada component
 
 pca$factors_plot # representació 2 primers components
 
+# es crea el pca amb prcomp
+pca2 <- prcomp(t(assay(se_tmp)), scale. = FALSE)
+
+# es crea un df per fer els gràfics
+pca2_df <- data.frame(
+  PC1 = pca2$x[,1],
+  PC2 = pca2$x[,2],
+  colData(se_tmp)
+)
+
+# vector amb les diferents variables
+var <- c("group", "batch", "sex", "age", "bmi", "cholesterol")
+
+# dibueixem els gràfics
+for (v in var) {
+  print(
+    ggplot(pca2_df, aes_string(x = "PC1", y = "PC2", color = v)) +
+      geom_point(size = 3) +
+      ggtitle(paste("Colored by", v)) +
+      theme_minimal()
+  )
+}
+
 pca$eigenvalues_plot # scree plot
 
 # llistat de les variables (metabòlits) amb un component més gran
@@ -564,6 +625,8 @@ umap_df <- data.frame(
 )
 
 # es representa gràficament
+ggplot(umap_df, aes(x = Dim1, y = Dim2, color = group)) +
+  geom_point(size = 3)
 ```
 
 # Referències
