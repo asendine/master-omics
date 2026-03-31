@@ -2,15 +2,14 @@
 title: "PEC 1 - Anàlisi de dades Òmiques"
 author: "Alejandro Sendín Emiliano"
 date: "`r Sys.Date()`"
-header-includes:
-  - \usepackage{float}
-bibliography: OM-1-bib.bib
-link-citations: true
 output:
   pdf_document:
     toc: true
     number_sections: true
     latex_engine: xelatex
+bibliography: "OM-1-bib.bib"
+link-citations: true
+header-includes: \usepackage{float}
 ---
 
 ```{r setup, include=FALSE}
@@ -252,7 +251,7 @@ Per fortuna, un element de "batch" no s'associa exclusivament o en gran part a u
 
 Ara per corregir l'efecte batch es fa servir la funció "removeBatchEffect".
 
-```{r 19, echo = false}
+```{r 19, echo = FALSE}
 group <- colData(se_norm)$group
 sex <- colData(se_norm)$sex
 age <- colData(se_norm)$age
@@ -425,7 +424,23 @@ Degut al tipus de dades i la seva estructura, es podria plantejar un anàlisi de
 
 L'article a revisar és "Large-Scale Multi-omic Analysis of COVID-19 Severity" [@overmyer2021large].
 
+La hipòtesi d'aquest estudi és que la mesura d'un gran nombre de biomolècules de diverses classes diferents (àcids nucleics, proteïnes, lípids i metabòlits) proporciona informació sobre l'horitzó molecular en el que se situa la COVID-19 i facilitaria els coneixements per entendre els factors associats a una major severitat.
 
+Per donar resposta a aquesta hipòtesi, es recullen principalment 2 tipus de dades en un total de 102 pacients amb COVID-19 i 26 pacients sense la malaltia. Per una banda s'obté informació clínica rellevant (demogràfica i característiques generals del perfil dels pacients) i per una altra, la més important, s'extreuen mostres de sang per obtenir valors quantitatius de totes les dades òmiques:  transcrits leucocitaris, proteïnes plasmàtiques, lípids i molècules petites transformades a log2. Tot i ser repertoris de dades diferents, el que ens diuen és que les dades demogràfiques ajuden a contextualitzar les dades òmiques recollides. També és interessant el fet que aprofiten aquestes mostres de sang de les dades òmiques per verificar que les dades clíniques encaixen amb les descrites.
+
+En total, es determinen més de 17000 biomolècules diferents i es crea una base de dades relacionals SQLite lliure juntament amb una app que explora les dades de forma més interactiva.
+
+A partir d'aquí utilitzen els pacients que tenen totes les dades de biomolècules completes (n = 125). Transformen aquestes dades amb log2() i les escalen. Seguidament fan servir la funció prcomp() per realitzar l'anàlisi PCA. El resultat de l'anàlisi es veu en la següent imatge:
+
+```{r 34, fig.cap="Gràfic de les 2 primeres components de l'article", fig.pos='H', out.width='50%', echo=FALSE}
+knitr::include_graphics("figures/grafic PCA article.jpg")
+```
+
+En conjunts de dades tan amplis, el fet de realitzar un anàlisi PCA i reduir la dimensió a un terreny més bàsic, pot revelar patrons que aparentment no eren apreciables desde un començament i orientar l'anàlisi amb més sentit. En aquest cas el que ens diuen és que el motiu de fer PCA recau en intentar obtenir una resposta a la seva hipòtesi de forma no supervisada, és a dir, se sobreentén que posteriorment realitzaran un anàlisi supervisat més específic. 
+
+Pels resultats del gràfic, es veu una primera component en la que sembla que la divisió de pacients en un baix HFD-45 (alta severitat) i alt HFD-45 (baixa severitat) comporta la principal font de variabilitat en les dades. Aquesta divisió s'efectua diagonalment creant un patró més o menys lineal, de manera que la segona component també està afectada, segurament en menor nivell, a la variabilitat de les dades pel grau de severitat. Els autors es limiten a evidenciar la forma que prenen les dades al gràfic i indiquen també el valors de la variabilitat capturada pels components 1 i 2, en aquest cas un 16% i un 10% respectivament. A més a més també defineixen un lleuger agrupament de les dades segons si tenen o no la malaltia. Consideren que aquests patrons són suficient raó per a dur a terme una posterior exploració supervisada (regressió) sobre l'estatus COVID-19 (si o no) i el valor d'HFD-45.
+
+Per concluir, fent un anàlisi de PCA ha permès manifestar una tendència específica de les dades segons el seu grau de severitat. La consulta també ofereix els percentatges de variabilitat extreta per cada component i evidencia altres petits matissos, com l'agrupament segons si els pacients tenen o no COVID-19. Tot això és útil no tant com per reduir el conjunt de dades a només 2 components, ja que es perdria massa informació (només s'obté una variabilitat explicada d'un 26% amb PC1 i 2), si no per obtenir una idea ràpida de cap a on poden apuntar les dades i cap a on es podria dirigir l'estudi. Si més no, si que em resulta evident que la mostra de pacients que no presenten la malaltia és baixa comparada amb els que si la tenen.
 
 # Apèndix: codi R utilitzat {#apendix}
 
@@ -627,6 +642,10 @@ umap_df <- data.frame(
 # es representa gràficament
 ggplot(umap_df, aes(x = Dim1, y = Dim2, color = group)) +
   geom_point(size = 3)
+
+# imatge de la representació de les dues components de l'article seleccionat per
+# l'exercici 2
+knitr::include_graphics("figures/grafic PCA article.jpg")
 ```
 
 # Referències
