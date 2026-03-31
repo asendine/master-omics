@@ -3,10 +3,9 @@ title: "PEC 1 - Anàlisi de dades Òmiques"
 author: "Alejandro Sendín Emiliano"
 date: "`r Sys.Date()`"
 output:
-  pdf_document:
+  html_document:
     toc: true
-    number_sections: true
-    latex_engine: xelatex
+    df_print: paged
 bibliography: "OM-1-bib.bib"
 link-citations: true
 header-includes: \usepackage{float}
@@ -23,9 +22,10 @@ knitr::opts_chunk$set(fig.align = "center")
 
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-
+install.packages("tinytex")
 BiocManager::install(c("SummarizedExperiment"))
 BiocManager::install("POMA")
+
 install.packages("ggtext")
 install.packages("magrittr")
 install.packages("umap")
@@ -33,10 +33,10 @@ install.packages("umap")
 
 ```{r libraries, include=FALSE}
 # Load packages
-
 library(knitr)
 library(SummarizedExperiment)
 library(POMA)
+library(patchwork)
 library(ggtext)
 library(magrittr)
 library(dplyr)
@@ -197,31 +197,25 @@ se_norm <- PomaNorm(se_imp, method = "log_pareto")
 
 Degut a que no es possible representar "features" amb el gràfic PomaDensity es fa servir "samples" per visualitzar el guany de normalitzar les dades.
 
-```{r 13, fig.pos='H', fig.cap="Boxplot de dades no escalades", out.width='65%', echo=FALSE}
-PomaBoxplots(se_imp, x = "samples")
-```
+```{r 1314, echo=FALSE, fig.cap="Efecte de la normalització de dades", out.width='100%'}
 
-```{r 13b, fig.pos='H', fig.cap="Boxplot de dades escalades", out.width='65%', echo=FALSE}
-PomaBoxplots(se_norm, x = "samples")
-```
+p1 <- PomaBoxplots(se_imp,  x = "samples")
+p2 <- PomaBoxplots(se_norm, x = "samples")
+p3 <- PomaDensity(se_imp,   x = "samples")
+p4 <- PomaDensity(se_norm,  x = "samples")
 
-```{r 14, fig.pos='H', fig.cap="Gràfic de densitats amb dades no escalades", out.width='65%', echo=FALSE}
-PomaDensity(se_imp, x = "samples")
-```
-
-```{r 14b, fig.pos='H', fig.cap="Gràfic de densitats amb dades escalades", out.width='65%', echo=FALSE}
-PomaDensity(se_norm, x = "samples")
+(p1 | p2) / (p3 | p4)
 ```
 
 L'escalat de les dades ha funcionat força bé tal i com es veu en els gràfics. No es valora per tant transformar les dades.
 
-```{r 15, fig.pos='H', fig.cap="Gràfic de visualització d'outliers", out.width='65%', echo=FALSE}
+```{r 15, fig.cap="Gràfic de visualització d'outliers", out.width='60%', echo=FALSE}
 PomaOutliers(se_norm)$polygon_plot
 ```
 
 Tampoc es veuen outliers clars, tots els punts es troben relacionats. Es destaca una clara diferència entre casos i controls i, en cadascun d'ells, hi ha una divisió dels punts en dues bandes superior i inferior clarament diferenciada. Per aquest motiu, es revisa que no hi hagi efecte batch en les dades. Per fer-ho fàcil, es col·loca la columna "batch" la primera a colData i es modifica el seu tipus de variable a factor, de manera que el gràfic de POMA agafi la columna "batch" com la referència per fer el gràfic i així veure si hi ha diferències:
 
-```{r 16, fig.pos='H', fig.cap="Gràfic de visualització de l'efecte batch", out.width='65%', echo=FALSE}
+```{r 16, fig.cap="Gràfic de visualització de l'efecte batch", out.width='60%', echo=FALSE}
 # es col·loca batch en primer lloc a colData
 colData(se_norm) <- colData(se_norm) %>% 
   as.data.frame() %>%
@@ -278,7 +272,7 @@ assay(se_tmp) <- assay(se_norm, "nobatch")
 
 Es realitza de nou el gràfic d'outliers per visualitzar que s'ha eliminat l'efecte batch:
 
-```{r 22, fig.pos='H', fig.cap="Gràfic de visualització: efecte batch eliminat", out.width='65%', echo=FALSE}
+```{r 22, fig.cap="Gràfic de visualització: efecte batch eliminat", out.width='60%', echo=FALSE}
 PomaOutliers(se_tmp)$polygon_plot
 ```
 
@@ -296,7 +290,7 @@ se_tmp <- se_norm
 assay(se_tmp) <- assay(se_norm, "nobatch")
 ```
 
-```{r 24, fig.pos='H', fig.cap="Gràfic de visualització: grups correctament separats", out.width='65%', echo=FALSE}
+```{r 24, fig.cap="Gràfic de visualització: grups correctament separats", out.width='60%', echo=FALSE}
 PomaOutliers(se_tmp)$polygon_plot
 ```
 
@@ -332,7 +326,7 @@ S'obté un percentatge de variança explicada del 73,76% només amb la primera c
 
 Representem gráficament les dues primeres components:
 
-```{r 27, fig.pos='H', fig.cap="Gràfic de representació de PC1 i PC2", out.width='65%', echo=FALSE}
+```{r 27, fig.cap="Gràfic de representació de PC1 i PC2", out.width='60%', echo=FALSE}
 pca$factors_plot
 ```
 
@@ -350,26 +344,31 @@ pca2_df <- data.frame(
 )
 ```
 
-```{r 29, fig.pos='H', fig.cap="Visualització per color de les variables", out.width='65%', warning=FALSE, echo=FALSE}
+```{r 29, fig.cap="Visualització per color de les variables", out.width='60%', warning=FALSE, echo=FALSE}
 # vector amb les diferents variables
 var <- c("group", "batch", "sex", "age", "bmi", "cholesterol")
 
+# llista buida per guardar els gràfics
+plots <- vector("list", length(var))
+
 # dibueixem els gràfics
-for (v in var) {
-  print(
-    ggplot(pca2_df, aes_string(x = "PC1", y = "PC2", color = v)) +
-      geom_point(size = 3) +
-      ggtitle(paste("Colored by", v)) +
-      theme_minimal()
-  )
+for (i in seq_along(var)) {
+  v <- var[i]
+  
+  plots[[i]] <- ggplot(pca2_df, aes_string(x = "PC1", y = "PC2", color = v)) +
+    geom_point(size = 3) +
+    ggtitle(paste("Colored by", v)) +
+    theme_minimal()
 }
+
+wrap_plots(plots, ncol = 2, nrow = 3)
 ```
 
 Es pot veure com la variable responsable de dividir les dades a nivell vertical és "sex", generant un 12,1% de variabilitat en la segona component. Altres variables com "bmi" o "cholesterol" tenen els seus valors també molt dividits a nivell horitzontal, és a dir, els controls aparentment tenen valors de bmi i colesterol més baixos.
 
 També es podrien obtenir els "loadings" o contribucions de cada metabòlit a cada component o, fins i tot, representar un "scree plot":
 
-```{r 30, fig.pos='H', fig.cap="Scree plot", out.width='65%', echo=FALSE}
+```{r 30, fig.cap="Scree plot", out.width='60%', echo=FALSE}
 pca$eigenvalues_plot
 ```
 
@@ -380,7 +379,7 @@ Si analitzem els "loadings", es pot obtenir un llistat de les variables (metabò
 ```{r 31}
 loads <- pca$loadings
 var_loads <- loads[order(abs(loads$PC1), decreasing = TRUE), ]
-head(var_loads[,1:2], 10)
+head(var_loads[,1:2], 5)
 ```
 
 ### Comparació amb altres mètodes
@@ -401,7 +400,7 @@ umap_df <- data.frame(
 )
 ```
 
-```{r 33, fig.pos='H', fig.cap="UMAP: Coordenades segons la variable group", out.width='65%', echo=FALSE}
+```{r 33, fig.cap="UMAP: Coordenades segons la variable group", out.width='60%', echo=FALSE}
 ggplot(umap_df, aes(x = Dim1, y = Dim2, color = group)) +
   geom_point(size = 3)
 ```
@@ -432,7 +431,7 @@ En total, es determinen més de 17000 biomolècules diferents i es crea una base
 
 A partir d'aquí utilitzen els pacients que tenen totes les dades de biomolècules completes (n = 125). Transformen aquestes dades amb log2() i les escalen. Seguidament fan servir la funció prcomp() per realitzar l'anàlisi PCA. El resultat de l'anàlisi es veu en la següent imatge:
 
-```{r 34, fig.cap="Gràfic de les 2 primeres components de l'article", fig.pos='H', out.width='50%', echo=FALSE}
+```{r 34, fig.cap="Gràfic de les 2 primeres components de l'article", out.width='50%', echo=FALSE}
 knitr::include_graphics("figures/grafic PCA article.jpg")
 ```
 
@@ -515,13 +514,13 @@ se_imp <- PomaImpute(se_sub, method = "knn", zeros_as_na = TRUE,
 # normalització de dades
 se_norm <- PomaNorm(se_imp, method = "log_pareto")
 
-# boxplots abans i després d'escalar dades
-PomaBoxplots(se_imp, x = "samples")
-PomaBoxplots(se_norm, x = "samples")
+# boxplots i gràfics de densitats abans i després d'escalar dades
+p1 <- PomaBoxplots(se_imp,  x = "samples")
+p2 <- PomaBoxplots(se_norm, x = "samples")
+p3 <- PomaDensity(se_imp,   x = "samples")
+p4 <- PomaDensity(se_norm,  x = "samples")
 
-# gràfics de densitats abans i després d'escalar dades
-PomaDensity(se_imp, x = "samples")
-PomaDensity(se_norm, x = "samples")
+(p1 | p2) / (p3 | p4)
 
 # gràfic outliers
 PomaOutliers(se_norm)$polygon_plot
@@ -607,22 +606,27 @@ pca2_df <- data.frame(
 # vector amb les diferents variables
 var <- c("group", "batch", "sex", "age", "bmi", "cholesterol")
 
+# llista buida per guardar els gràfics
+plots <- vector("list", length(var))
+
 # dibueixem els gràfics
-for (v in var) {
-  print(
-    ggplot(pca2_df, aes_string(x = "PC1", y = "PC2", color = v)) +
-      geom_point(size = 3) +
-      ggtitle(paste("Colored by", v)) +
-      theme_minimal()
-  )
+for (i in seq_along(var)) {
+  v <- var[i]
+  
+  plots[[i]] <- ggplot(pca2_df, aes_string(x = "PC1", y = "PC2", color = v)) +
+    geom_point(size = 3) +
+    ggtitle(paste("Colored by", v)) +
+    theme_minimal()
 }
+
+wrap_plots(plots, ncol = 2, nrow = 3)
 
 pca$eigenvalues_plot # scree plot
 
 # llistat de les variables (metabòlits) amb un component més gran
 loads <- pca$loadings
 var_loads <- loads[order(abs(loads$PC1), decreasing = TRUE), ]
-head(var_loads[,1:2], 10)
+head(var_loads[,1:2], 5)
 
 # anàlisi UMAP
 # s'obté la matriu principal
