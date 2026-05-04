@@ -1,0 +1,46 @@
+---
+title: "PEC 2 - Anàlisi de dades Òmiques"
+author: "Alejandro Sendín Emiliano"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+bibliography: -
+link-citations: true
+header-includes: \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+# knitr options
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = "center")
+```
+
+```{r install, eval=FALSE ,include=FALSE}
+# Install packages
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+install.packages("tinytex")
+BiocManager::install(c("SummarizedExperiment"))
+BiocManager::install("POMA")
+
+install.packages("ggtext")
+install.packages("magrittr")
+install.packages("umap")
+```
+
+```{r libraries, include=FALSE}
+# Load packages
+library(knitr)
+library(SummarizedExperiment)
+library(POMA)
+library(patchwork)
+library(ggtext)
+library(magrittr)
+library(dplyr)
+library(limma)
+library(ggplot2)
+library(umap)
+```
