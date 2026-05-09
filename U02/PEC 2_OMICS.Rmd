@@ -36,7 +36,6 @@ if (!require(dplyr)) install.packages("dplyr", dep=TRUE)
 ```{r lib, include=FALSE}
 # Load packages
 library(knitr)
-library(dplyr)
 ```
 
 # Importació de dades
@@ -47,10 +46,14 @@ En primer lloc importem les dades per realitzar la PAC:
 load("PEC2_GSE50760_colorectal_SE.Rda")
 ```
 
-Aquestes dades provenen de l'estudi GSE50760 de GEO on s'han obtingut mostres de teixit sa del colon, del tumor i del teixit metastàsic del fetge en cadascun dels 18 pacients de l'estudi. Segons les dades del repositori de GEO, la preparació i seqüenciació es va fer mitjançant instrumental de l'empresa Illumina, mentre que l'amplificació dels fragments mitjançant PCR.
+Aquestes dades provenen de l'estudi GSE50760 de GEO on s'han obtingut mostres de teixit sa del colon, del tumor i del teixit metastàsic del fetge en cadascun dels 18 pacients de l'estudi. Segons les dades del repositori de GEO, la preparació i seqüenciació es va fer mitjançant instrumental de l'empresa Illumina, mentre que l'amplificació dels fragments es va realitzar mitjançant PCR.
+
+Es visualitzen les dades:
 
 ```{r se_vis}
-se
+class(se)
+dim(se)
+assayNames(se)
 ```
 
 Veiem que les dades configuren un objecte de tipus *SummarizedExperiment* (SE) que conté la informació de:
@@ -64,14 +67,15 @@ Veiem que les dades configuren un objecte de tipus *SummarizedExperiment* (SE) q
 > - **colData**: les files són les diferents mostres i cada columna una variable biològica descriptiva de les mostres. N'hi ha un total de 10 variables que descriuen les mostres.
 > - **metadata**: conté informació addicional sobre l'experiment. En aquest cas són 12 ítems informatius.
 
-En concret, SE conté `r nrow(se)` gens i `r ncol(se)` mostres. Com s'ha vist, aquestes conformen un total de 4 assajos diferents. Cada mostra ve caracteritzada per les variables biològiques: `r paste(colnames(colData(se)), collapse = ", ")`. Per altra banda els gens es caracteritzen per: `r paste(colnames(rowData(se)), collapse = ", ")`.
+En concret, SE conté `r nrow(se)` gens i `r ncol(se)` mostres. Com s'ha vist, aquestes conformen un total de 4 assajos diferents. Cada mostra ve caracteritzada per les variables biològiques: `r paste(colnames(colData(se)), collapse = ", ")`. Per altra banda els gens es caracteritzen per les variables: `r paste(colnames(rowData(se)), collapse = ", ")`.
 
 El disseny de l'estudi es basa en l'estructura següent:
 
 ```{r se_struct}
-as.data.frame(colData(se)) %>%
-  count(patient_id, condition)
+table(patient_id = colData(se)$patient_id, condition = colData(se)$condition)
 ```
+
+On hi ha 18 pacients diferents cadascun amb 3 mostres analitzades ("normal", "primary_tumor" i "liver_metastasis").
 
 # Selecció mostra individual
 
@@ -91,16 +95,58 @@ se_sub
 
 I es confirma l'estructura del disseny es manté:
 
-```{r}
-as.data.frame(colData(se_sub)) %>%
-  count(se_sub$patient_id, se_sub$condition)
+```{r se_sub_str}
+table(patient_id = colData(se_sub)$patient_id, condition = colData(se_sub)$condition)
 ```
 
 Tal i com es veu a la taula, els pacients seleccionats són: 10, 13, 17, 2, 20, 21, 23, 3, 6 i 7 i tots ells tenen els 3 tipus de teixit disponible. Això s'ha visualitzat "a mà" però si el llistat hagués sigut molt més complex s'hauria d'haver fet servir un bucle que pentinés tot el subconjunt.
 
 # Anàlisi exploratori i control de qualitat
 
+Per explorar la distribució de les dades primer fem un boxplot:
 
+```{r se_sub_boxplot, fig.width=10, fig.height=5}
+logcpmdata <- assay(se_sub, "logCPM")
+mostres <- colnames(se_sub)
+
+boxplot(logcpmdata, las = 2, outline = FALSE, main = "Distribució logCPM per mostra", 
+        names = mostres, ylab = "logCPM")
+abline(h=median(logcpmdata), col="blue")
+```
+
+Aparentment no s'aprecia cap problema en quant als valors. Ara es pot fer un dendrograma per avaluar els grups en que es classifiquen:
+
+```{r se_sub_dendro, fig.width=10, fig.height=5}
+clust.euclid.average <- hclust(dist(t(logcpmdata)), method = "average")
+plot(clust.euclid.average, labels = mostres, main = "Dendrograma de logCPM (se_sub)", cex = 0.6, hang = -1)
+```
+
+A priori, tot i que hi hagi algunes excepcions, els grups es distribueixen segons el tipus de teixit de forma evident.
+
+Finalment es realitza un anàlisi PCA distingint els valors segons el tipus de teixit de la mostra, ja que és el que esperem que expliqui la variabilitat:
+
+```{r se_sub_pca}
+condition <- as.factor(colData(se_sub)$condition)
+colors <- as.numeric(condition)
+
+pca <- prcomp(t(logcpmdata), center = TRUE, scale. = TRUE)
+varexp <- round(100*pca$sdev^2/sum(pca$sdev^2), 1)
+
+plot(pca$x[, 1], pca$x[, 2], col = colors, pch = 16, cex = 1.2,  
+     xlab = paste0("PC1 (", varexp[1], "%)"), 
+     ylab = paste0("PC2 (", varexp[2], "%)"),
+     main = "PCA de les mostres segons tipus teixit"
+)
+
+legend("topleft", legend = levels(condition), 
+       col = seq_along(levels(condition)), 
+       pch = 16, cex = 0.8, title = "Condition"
+)
+```
+
+Segons el gràfic obtingut el que es pot apreciar és que efectivament sembla que hi ha una divisió de les mostres segons el tipus de teixit. De fet, el teixit "normal" apareix sobretot al centre del gràfic mentre que el del tumor principal i el teixit metastàsic es troben situats cap a la part positiva de la primera component. Per altra banda, la variabilitat explicada per les dues components no és massa gran però tampoc implica que l'anàlisi sigui erroni, simplement no hi ha tanta correlació com la que s'ha vist en altres exercicis.
+
+Finalment si que és destacable el punt situat a la part més negativa tant de la component 1 com la 2 corresponent al teixit normal. Aquesta dada és un "outlier" i probablement sigui més adient retirar-la de l'anàlisi.
 
 # Apèndix: codi R utilitzat {#apendix}
 
@@ -108,7 +154,9 @@ Tal i com es veu a la taula, els pacients seleccionats són: 10, 13, 17, 2, 20, 
 # import data
 load("PEC2_GSE50760_colorectal_SE.Rda")
 # visualize data
-se
+class(se)
+dim(se)
+assayNames(se)
 # study structure
 as.data.frame(colData(se)) %>%
   count(patient_id, sample_type)
