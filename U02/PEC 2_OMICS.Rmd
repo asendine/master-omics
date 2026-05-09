@@ -3,44 +3,126 @@ title: "PEC 2 - Anàlisi de dades Òmiques"
 author: "Alejandro Sendín Emiliano"
 date: "`r Sys.Date()`"
 output:
-  html_document:
+  pdf_document:
     toc: true
-    df_print: paged
-bibliography: -
-link-citations: true
-header-includes: \usepackage{float}
+    toc_depth: 3
+    toc_float: 
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+    theme: cerulean
+    highlight: textmate
+    latex_engine: xelatex
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
-# knitr options
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(fig.align = "center")
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
 ```
 
 ```{r install, eval=FALSE ,include=FALSE}
 # Install packages
-
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-install.packages("tinytex")
-BiocManager::install(c("SummarizedExperiment"))
-BiocManager::install("POMA")
+if (!require(SummarizedExperiment)) BiocManager::install("SummarizedExperiment")
+if (!require(dplyr)) install.packages("dplyr", dep=TRUE)
 
-install.packages("ggtext")
-install.packages("magrittr")
-install.packages("umap")
+
+#if (!require(Rsubread)) BiocManager::install("Rsubread")
+
 ```
 
-```{r libraries, include=FALSE}
+```{r lib, include=FALSE}
 # Load packages
 library(knitr)
-library(SummarizedExperiment)
-library(POMA)
-library(patchwork)
-library(ggtext)
-library(magrittr)
 library(dplyr)
-library(limma)
-library(ggplot2)
-library(umap)
+```
+
+# Importació de dades
+
+En primer lloc importem les dades per realitzar la PAC:
+
+```{r data_import}
+load("PEC2_GSE50760_colorectal_SE.Rda")
+```
+
+Aquestes dades provenen de l'estudi GSE50760 de GEO on s'han obtingut mostres de teixit sa del colon, del tumor i del teixit metastàsic del fetge en cadascun dels 18 pacients de l'estudi. Segons les dades del repositori de GEO, la preparació i seqüenciació es va fer mitjançant instrumental de l'empresa Illumina, mentre que l'amplificació dels fragments mitjançant PCR.
+
+```{r se_vis}
+se
+```
+
+Veiem que les dades configuren un objecte de tipus *SummarizedExperiment* (SE) que conté la informació de:
+
+> - **assays**: Conté els diferents assajos realitzats entre les files (els diferents gens) i les columnes (les mostres de l'experiment). En aquest cas s'han recollit 4 variables diferents que conformen els 4 assajos.
+>   - counts: recompte de gens per mostra.
+>   - logCPM: recompte per milió a escala logarítmica.
+>   - TPM: trànscripts per milió.
+>   - FPKM: fragments per kilobase i per milió.
+> - **rowData**: les files són els diferents gens i cada columna una variable tècnica de cada gen. Hi ha un total de 8 variables que aporten informació sobre cada gen.
+> - **colData**: les files són les diferents mostres i cada columna una variable biològica descriptiva de les mostres. N'hi ha un total de 10 variables que descriuen les mostres.
+> - **metadata**: conté informació addicional sobre l'experiment. En aquest cas són 12 ítems informatius.
+
+En concret, SE conté `r nrow(se)` gens i `r ncol(se)` mostres. Com s'ha vist, aquestes conformen un total de 4 assajos diferents. Cada mostra ve caracteritzada per les variables biològiques: `r paste(colnames(colData(se)), collapse = ", ")`. Per altra banda els gens es caracteritzen per: `r paste(colnames(rowData(se)), collapse = ", ")`.
+
+El disseny de l'estudi es basa en l'estructura següent:
+
+```{r se_struct}
+as.data.frame(colData(se)) %>%
+  count(patient_id, condition)
+```
+
+# Selecció mostra individual
+
+Per individualitzar la pràctica, es selecciona una mostra per estudiant, en el meu cas s'obté se_sub.
+
+```{r se_sample}
+# Faré servir les 4 últimes xifres del meu DNI
+myseed <- sum(utf8ToInt("2426"))
+set.seed(myseed)
+
+patients <- unique(se$patient_id)
+selected_patients <- sample(patients, 10)
+
+se_sub <- se[, se$patient_id %in% selected_patients]
+se_sub
+```
+
+I es confirma l'estructura del disseny es manté:
+
+```{r}
+as.data.frame(colData(se_sub)) %>%
+  count(se_sub$patient_id, se_sub$condition)
+```
+
+Tal i com es veu a la taula, els pacients seleccionats són: 10, 13, 17, 2, 20, 21, 23, 3, 6 i 7 i tots ells tenen els 3 tipus de teixit disponible. Això s'ha visualitzat "a mà" però si el llistat hagués sigut molt més complex s'hauria d'haver fet servir un bucle que pentinés tot el subconjunt.
+
+# Anàlisi exploratori i control de qualitat
+
+
+
+# Apèndix: codi R utilitzat {#apendix}
+
+```{r app, eval=FALSE}
+# import data
+load("PEC2_GSE50760_colorectal_SE.Rda")
+# visualize data
+se
+# study structure
+as.data.frame(colData(se)) %>%
+  count(patient_id, sample_type)
+# subsample creation
+myseed <- sum(utf8ToInt("2426"))
+set.seed(myseed)
+
+patients <- unique(se$patient_id)
+selected_patients <- sample(patients, 10)
+
+se_sub <- se[, se$patient_id %in% selected_patients]
+se_sub
+# subsample structure
+as.data.frame(colData(se_sub)) %>%
+  count(se_sub$patient_id, se_sub$condition)
+
 ```
