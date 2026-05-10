@@ -28,8 +28,6 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 if (!require(SummarizedExperiment)) BiocManager::install("SummarizedExperiment")
 if (!require(edgeR))BiocManager::install("edgeR")
 if (!require(limma))BiocManager::install("limma")
-
-
 ```
 
 ```{r lib, include=FALSE}
@@ -41,6 +39,8 @@ library(limma)
 ```
 
 # Introducció i objectius
+
+
 
 # Importació i descripció de les dades
 
@@ -255,7 +255,6 @@ I es crea la matriu de disseny:
 
 ```{r design_matrix}
 design <- model.matrix(~ patient_id + condition, data = as.data.frame(colData(se_pn)))
-design
 ```
 
 *patient_id* a més de representar la identificació de cada pacient, és la forma que hi ha de restringir l'anàlisi per a que les mostres a comparar ho facin en el si del mateix pacient i es pugui determinar diferències en l'expressió derivades només del propi teixit i no de la persona de la que provenen les mostres.
@@ -263,13 +262,14 @@ design
 # Expressió diferencial
 
 En primer lloc es crea l'objecte `voom`, s'ajusta el model lineal amb la matriu de disseny i s'aplica la regularització de l'estimador de l'error amb `eBayes`.
+
 ```{r voom_dge_pn}
 voomObj <- voom(dge_pn, design)
 fit <- lmFit(voomObj, design)
 fit <- eBayes(fit)
 ```
 
-Els resultats es mostren en la següent taula:
+Els resultats es mostren en la següent taula, on podem obtenir els *valors p* i el *logFC*, entre d'altres variables.
 
 ```{r res_fit}
 res <- topTable(fit, coef = "conditionprimary_tumor", number = Inf)
@@ -277,11 +277,58 @@ head(res)
 dim(res)
 ```
 
-I en el gràfic:
+> - *FDR < 0.05*: Implica conservar només els gens amb un p-valor ajustat (adj.P.val) inferior a 0.05.
+> - *|log2FC| > 2*: Implica conservar els gens amb un canvi en la expressió gènica en les condicions donades (logFC) superior a 2 ja siguin sobreexpressats o infraexpressats.
 
-```{r}
-volcanoplot(fit)
+Amb aquests criteris és possible obtenir el llistat dels principals gens diferencialment expressats i ordenar-lo per *FDR* i per *|log2FC|*:
+
+```{r res_DE}
+res_DE <- res[res$adj.P.Val < 0.05 & abs(res$logFC) > 2, ]
+res_DE <- res_DE[order(res_DE$adj.P.Val, -abs(res_DE$logFC)), ]
+head(res_DE)
+dim(res_DE)
 ```
+
+Ara es poden classificar aquests gens en sobreexpressats o infraexpressats segons si *log2FC* és superior a 2 o inferior a 2.
+
+```{r res_DE2}
+res_DE$DE[res_DE$adj.P.Val < 0.05 & res_DE$logFC > 2] <- "Sobreexpressat"
+res_DE$DE[res_DE$adj.P.Val < 0.05 & res_DE$logFC < -2] <- "Infraexpressat"
+res_de_SE <- res_DE[res_DE$DE == "Sobreexpressat", ]
+res_de_IE <- res_DE[res_DE$DE == "Infraexpressat", ]
+```
+
+En total, hi ha `dim(res_DE)[1]` gens diferencialment expressats. Dels quals `res_de_SE` estan sobreexpressats i `res_de_IE` estan infraexpressats.
+
+Els 10 gens més rellevants per ordre de significància estadística s'indiquen a continuació:
+
+```{r top10_DE}
+res_DE$gene_symbol <- rowData(se_pn)[rownames(res_DE), "gene_symbol"]
+top10 <- head(res_DE, 10)
+top10 <- top10[, c("gene_symbol", "logFC", "adj.P.Val", "DE")]
+knitr::kable(top10)
+```
+
+Per últim es representa la diferenciació gènica amb un volcano plot:
+
+```{r volcano, fig.width=6, fig.height=5}
+# primer afegim la columna DE a la taula de resultats inicial
+res$DE <- "No_dif"
+res$DE[res$adj.P.Val < 0.05 & res$logFC > 2] <- "Sobreexpressat"
+res$DE[res$adj.P.Val < 0.05 & res$logFC < -2] <- "Infraexpressat"
+
+plot(res$logFC, -log10(res$adj.P.Val), pch = 16, cex = 0.5,
+     col = ifelse(res$DE == "Sobreexpressat", "coral3", 
+                  ifelse(res$DE == "Infraexpressat", "chartreuse2", "grey")),
+     xlab = "log2 Fold Change", ylab = "-log10(FDR)", main = "Volcano plot")
+
+abline(v = c(-2, 2), lty = 2)
+abline(h = -log10(0.05), lty = 2)
+
+legend("topright", legend = c("No_dif", "Sobreexpressat", "Infraexpressat"),
+       col = c("grey", "coral3", "chartreuse2"), pch = 16, cex = 0.8)
+```
+
 
 
 # Anàlisi de significació biològica (ORA)
