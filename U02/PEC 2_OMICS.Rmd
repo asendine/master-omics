@@ -26,19 +26,23 @@ knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 if (!require(SummarizedExperiment)) BiocManager::install("SummarizedExperiment")
-if (!require(dplyr)) install.packages("dplyr", dep=TRUE)
+if (!require(edgeR))BiocManager::install("edgeR")
+if (!require(limma))BiocManager::install("limma")
 
-
-#if (!require(Rsubread)) BiocManager::install("Rsubread")
 
 ```
 
 ```{r lib, include=FALSE}
 # Load packages
 library(knitr)
+library(SummarizedExperiment)
+library(edgeR)
+library(limma)
 ```
 
-# Importació de dades
+# Introducció i objectius
+
+# Importació i descripció de les dades
 
 En primer lloc importem les dades per realitzar la PAC:
 
@@ -77,7 +81,7 @@ table(patient_id = colData(se)$patient_id, condition = colData(se)$condition)
 
 On hi ha 18 pacients diferents cadascun amb 3 mostres analitzades ("normal", "primary_tumor" i "liver_metastasis").
 
-# Selecció mostra individual
+# Subconjunt de dades analitzat
 
 Per individualitzar la pràctica, es selecciona una mostra per estudiant, en el meu cas s'obté se_sub.
 
@@ -125,7 +129,7 @@ A priori, tot i que hi hagi algunes excepcions, els grups es distribueixen segon
 
 Finalment es realitza un anàlisi PCA distingint els valors segons el tipus de teixit de la mostra, ja que és el que esperem que expliqui la variabilitat:
 
-```{r se_sub_pca}
+```{r se_sub_pca1, fig.width=6, fig.height=5}
 condition <- as.factor(colData(se_sub)$condition)
 colors <- as.numeric(condition)
 
@@ -144,9 +148,145 @@ legend("topleft", legend = levels(condition),
 )
 ```
 
-Segons el gràfic obtingut el que es pot apreciar és que efectivament sembla que hi ha una divisió de les mostres segons el tipus de teixit. De fet, el teixit "normal" apareix sobretot al centre del gràfic mentre que el del tumor principal i el teixit metastàsic es troben situats cap a la part positiva de la primera component. Per altra banda, la variabilitat explicada per les dues components no és massa gran però tampoc implica que l'anàlisi sigui erroni, simplement no hi ha tanta correlació com la que s'ha vist en altres exercicis.
+Segons el gràfic obtingut el que es pot apreciar és que efectivament sembla que hi ha una agrupació de les mostres segons el tipus de teixit. De fet, el teixit "normal" apareix sobretot al centre del gràfic mentre que el del tumor principal i el teixit metastàsic es troben situats cap a la part positiva de la primera component. Per tant, tot i que amb el boxplot es podria dir que les mostres són comparables entre si, sembla que s'hauria de tenir en compte aquesta organització interna.
 
-Finalment si que és destacable el punt situat a la part més negativa tant de la component 1 com la 2 corresponent al teixit normal. Aquesta dada és un "outlier" i probablement sigui més adient retirar-la de l'anàlisi.
+Per altra banda, la variabilitat explicada per les dues components en el PCA no és massa gran però tampoc implica que l'anàlisi sigui erroni, simplement no hi ha tanta correlació com la que s'ha vist en altres exercicis.
+
+Finalment si que és destacable el punt situat a la part més negativa tant de la component 1 com la 2 corresponent al teixit normal. Aquesta dada és un "outlier" i probablement sigui més adient retirar-la de l'anàlisi. S'aprofita aquesta dada per realitzar el mateix gràfic PCA però mostrant els identificadors de pacient, per un costat per veure quina dada és i per l'altre per veure si hi ha efecte pacient:
+
+```{r se_sub_pca2, fig.width=6, fig.height=5}
+condition <- as.factor(colData(se_sub)$patient_id)
+colors <- as.numeric(condition)
+
+pca <- prcomp(t(logcpmdata), center = TRUE, scale. = TRUE)
+varexp <- round(100*pca$sdev^2/sum(pca$sdev^2), 1)
+
+plot(pca$x[, 1], pca$x[, 2], col = colors, pch = 16, cex = 1.2,  
+     xlab = paste0("PC1 (", varexp[1], "%)"), 
+     ylab = paste0("PC2 (", varexp[2], "%)"),
+     main = "PCA de les mostres segons el pacient"
+)
+
+text(pca$x[, 1], pca$x[, 2], labels = condition, cex = 0.5,
+     pos = 3, offset = 0.3)
+
+legend("topleft", legend = levels(condition), 
+       col = seq_along(levels(condition)), 
+       pch = 16, cex = 0.8, title = "Condition"
+)
+```
+
+Simplement canviant la variable definida "condition" per aquella amb la que volem ilustrar els punts i afegint etiquetes s'obté el gràfic PCA per pacient, en el que veiem com l'outlier pertany a la mostra de teixit normal del pacient nº3. No s'aprecia cap agrupació específica per pacient.
+
+Per acabar, en aquest estudi sembla que no s'ha indicat el número de lot, de forma que no és possible indagar sobre si afecta a l'agrupació de mostres obtinguda. Segurament no seria així ja que s'ha vist que l'agrupació prové del tipus de teixit, però si qualsevol altra variable (com el lot o el tipus de pacient) coincidís amb l'agrupació per tipus de teixit, hi hauria un error en el procés d'obtenció de les mostres.
+
+# Preprocessat de les dades
+
+Per filtrar les dades es fa servir la funció `cpm()` del paquet `edgeR`: 
+
+```{r filt_se_sub}
+cpm_data <- cpm(assay(se_sub, "counts"))
+
+# s'obtenen els gens amb CPM > 1 en >= 5 mostres
+keep_genes <- rowSums(cpm_data > 1) >= 5
+se_sub_filt <- se_sub[keep_genes, ]
+
+# es visualitza el canvi de dimensió
+dim(se_sub)
+dim(se_sub_filt)
+```
+
+Per falta d'experiència, s'ha cregut convenient el criteri de filtratge establert a l'enunciat.
+Com es pot veure, aquest criteri ha reduït el tamany de les dades de 39376 gens a 18561, és a dir, aproximadament la meitat no compleixen el criteri establert.
+
+Ara a partir d'aquest subset filtrat es realitza una normalització, de nou, fent servir `edgeR`. 
+
+```{r norm_se_sub_filt}
+# es crea l'objecte de classe S4 DGEList
+dgeObj <- DGEList(counts = (assay(se_sub_filt, "counts")))
+
+# es calculen els factors de normalització i s'inclouen a la llista de l'objecte DGE
+dgeObj_norm <- calcNormFactors(dgeObj, method = "TMM")
+```
+
+El criteri per fer servir `edgeR` és degut a que és senzill d'aplicar i encaixa amb les dades de recompte de RNA-seq que tenim. Aporta els factors de normalització necessaris per establir un tamany de llibrería adequat segons el nivell de variabilitat dels gens.
+
+A partir d'aquí es podria considerar repetir l'exploració de les dades i veure si hi ha cap canvi.
+
+# Model i disseny experimental
+
+Tenint ja el subconjunt `se_sub` filtrat (`se_sub_filt`), s'obtenen les dades només de les mostres *normal* i *primary_tumor*, creant un nou subconjunt filtrat anomenat `se_pn`.
+
+```{r pn_se_sub_filt}
+se_pn <- se_sub_filt[, colData(se_sub_filt)$condition %in% c("primary_tumor", "normal")]
+table(colData(se_pn)$condition)
+table(colData(se_pn)$patient_id)
+```
+
+Al veure que encara es contempla el nivell *liver_metastasis*, s'elimina. També es canvia la variable *patient_id* a *factor* 
+
+```{r se_pn}
+# s'elimina la categoria liver_metastasis
+colData(se_pn)$condition <- droplevels(colData(se_pn)$condition)
+
+# es converteix patient_id a factor
+colData(se_pn)$patient_id <- factor(colData(se_pn)$patient_id)
+
+tab_pairs <- table(patient_id = colData(se_pn)$patient_id, condition = colData(se_pn)$condition)
+tab_pairs
+```
+
+Els pacients seleccionats i amb les dues mostres son: 10, 13, 17, 2, 20, 21, 23, 3, 6 i 7. És important que el subconjunt contingui només pacients amb les dues mostres a comparar. L'objectiu és avaluar l'expressió de gens en un teixit sa i malalt, de manera que fer aquesta comparació en un mateix subjecte és molt més significatiu que comparar totes les mostres entre si, ja que llavors s'inclou un biaix innecessari corresponent a la variabilitat genètica de la població.
+
+S'estableix la referència per a la matriu de disseny, en el cas d'estudi *normal* és la condició principal.
+
+```{r refnormal}
+colData(se_pn)$condition <- relevel(colData(se_pn)$condition, ref = "normal")
+```
+
+Per últim es recalculen els factors de normalització TMM necessaris per posteriorment fer l'anàlisi:
+
+```{r dge_pn}
+dge_pn <- DGEList(counts = assay(se_pn, "counts"))
+dge_pn <- calcNormFactors(dge_pn, method = "TMM")
+```
+
+I es crea la matriu de disseny:
+
+```{r design_matrix}
+design <- model.matrix(~ patient_id + condition, data = as.data.frame(colData(se_pn)))
+design
+```
+
+*patient_id* a més de representar la identificació de cada pacient, és la forma que hi ha de restringir l'anàlisi per a que les mostres a comparar ho facin en el si del mateix pacient i es pugui determinar diferències en l'expressió derivades només del propi teixit i no de la persona de la que provenen les mostres.
+
+# Expressió diferencial
+
+En primer lloc es crea l'objecte `voom`, s'ajusta el model lineal amb la matriu de disseny i s'aplica la regularització de l'estimador de l'error amb `eBayes`.
+```{r voom_dge_pn}
+voomObj <- voom(dge_pn, design)
+fit <- lmFit(voomObj, design)
+fit <- eBayes(fit)
+```
+
+Els resultats es mostren en la següent taula:
+
+```{r res_fit}
+res <- topTable(fit, coef = "conditionprimary_tumor", number = Inf)
+head(res)
+dim(res)
+```
+
+I en el gràfic:
+
+```{r}
+volcanoplot(fit)
+```
+
+
+# Anàlisi de significació biològica (ORA)
+
+# Discussió i conclusions
 
 # Apèndix: codi R utilitzat {#apendix}
 
@@ -154,23 +294,12 @@ Finalment si que és destacable el punt situat a la part més negativa tant de l
 # import data
 load("PEC2_GSE50760_colorectal_SE.Rda")
 # visualize data
-class(se)
-dim(se)
-assayNames(se)
+
 # study structure
-as.data.frame(colData(se)) %>%
-  count(patient_id, sample_type)
+
 # subsample creation
-myseed <- sum(utf8ToInt("2426"))
-set.seed(myseed)
 
-patients <- unique(se$patient_id)
-selected_patients <- sample(patients, 10)
-
-se_sub <- se[, se$patient_id %in% selected_patients]
-se_sub
 # subsample structure
-as.data.frame(colData(se_sub)) %>%
-  count(se_sub$patient_id, se_sub$condition)
+
 
 ```
