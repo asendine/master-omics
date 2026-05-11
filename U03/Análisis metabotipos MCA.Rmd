@@ -1,0 +1,115 @@
+---
+title: "PEC3 - Integración multiómica e identificación de metabotipos asociados al riesgo cardiovascular"
+author: "Alejandro Sendín Emiliano"
+date: "`r Sys.Date()`"
+output:
+  bookdown::pdf_document2:
+    latex_engine: xelatex
+    toc: false
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Parte A. Respuestas guiadas
+
+## Bloque 1. Comprensión general del estudio
+
+### Pregunta 1
+
+Según el enunciado el objetivo principal es investigar si la integración de bloques de datos de diferentes ómicas permite identificar patrones biológicos asociados al riesgo cardiovascular y explorar la posible existencia de metabotipos dentro de la cohorte. 
+
+Dicho de otra manera, la idea es evaluar si es posible definir metabotipos o patrones biológicos a partir de datos ómicos diferentes para las mismas muestras usando la integración multiómica mediante MFA.
+
+### Pregunta 2
+
+Se han integrado 4 tipos de datos:
+
+> - Datos de riesgo cardiovascular. Clasifican los pacientes en un inicio según su riesgo *Low* (bajo) o *High* (alto).
+> - Datos clínicos. Primer bloque de datos que contiene parámetros antropométricos, metabólicos e inflamatorios.
+> - Datos metabolómicos de origen plasmático. Conforma el segundo bloque de datos.
+> - Datos de la microbiota intestinal (abundancias de taxones de bacterias). Conforma el tercer bloque.
+
+### Pregunta 3
+
+En el ejemplo de esta práctica el análisis de datos por separado implica obtener una visión que está limitada a cada bloque de estudio. Si posteriormente se pretende buscar alguna relación, puede ser muy complicado cohesionar los resultados. En cambio, plantear el análisis integrativo desde el principio es más sencillo, y su potencial reside en la posibilidad de descubrir patrones biológicos que serán enriquecidos por todas las variables obtenidas.
+
+## Bloque 2. Interpretación de la MFA
+
+### Pregunta 4
+
+La Figura 1 muestra el porcentaje de variabilidad explicado por las primeras dimensiones del MFA. La primera dimensión es la que explica una mayor proporción, con un 15,9%.
+
+### Pregunta 5
+
+Las dos primeras dimensiones explican un 15,9% más un 10,9%, es decir, un total de 26,8% de variabilidad.
+
+### Pregunta 6
+
+En la Tabla 1 se muestran las contribuciones de los bloques de datos a las dimensiones 1 y 2. El bloque que más contribuye a la dimensión 1 es el bloque *metabolomics*, que contiene los datos de las abundancias de distintos metabólitos en plasma.
+
+### Pregunta 7
+
+Siguiendo la tabla anterior, el bloque *microbiome* correspondiente a los datos de la microbiota intestinal es el que más contribuye a la dimensión 2.
+
+### Pregunta 8
+
+El bloque metabolómico presenta un papel central en la estructura global de las dos primeras componentes ya que su contribución en ambas es el más alto (dimensión 1) o el segundo más alto (dimensión 2). En otras palabras, las diferencias entre individuos en el espacio definido por las dos primeras dimensiones tienen un importante origen metabolómico.
+
+### Pregunta 9
+
+En la Tabla 2 se muestran las variables que más contribuyen a la dimensión 1. En primer lugar constan las pertenecientes al bloque *clinical*. Tras estas, siguen algunas de las variables del grupo *metabolomics*.
+
+En la Figura 4 se puede observar la contribución y dirección asociados a estas variables. La dimensión 1 parece estar relacionada con la bioquímica clínica y antropometría de los individuos, donde las variables del bloque *clinical* asociadas al riesgo cardiovascular se encuentran en el lado opuesto a la que comunmente se asocia a la reducción de este riesgo (HDL).
+
+### Pregunta 10
+
+Las variables que más contribuyen a la dimensión 2 se muestran en la Tabla 3. Lo que se encuentra es un perfil  mixto entre las variables del bloque *clinical* (sin BMI y CRP) y las variables met_34, met_37, met_32 y met_36 del bloque *metabolomics*. Posteriormente se encuentran algunas variables del bloque *microbiome*.
+
+En esta dimensión sigue habiendo una representación de carácter bioquímica y antropométrica a las que se le suman las contribuciones metabólicas y de la microbiota intestinal, creando un perfil más bien mixto entre las diferentes ómicas.
+
+### Pregunta 11
+
+La separación entre grupos *Low-High* parece más bien débil. Los puntos de ambas categorías estan muy mezclados a pesar de que se atisba un ligero patrón en los cúmulos que forma cada clase. La tendencia se resume en las elipses centrales para *High* y *Low* que incluso se llegan a solapar.
+
+## Bloque 3. Clustering y metabotipos
+
+### Pregunta 12
+
+No, la coincidencia es anecdótica. Los clústers generados, de hecho, contienen cada uno un número similar de casos *High* y *Low*, de manera que en vez de dividir se produce una mezcla no muy lejos de la homogeneidad entre clases por clúster.
+
+### Pregunta 13
+
+El clustering permite establecer patrones, en este caso se eligen 2, donde los individuos pueden situarse teniendo en cuenta la información de todas las variables de cada grupo y por lo tanto adoptando un punto de vista no solo basado en *High* y *Low* sino en un varemo multiómico. 
+
+### Pregunta 14
+
+En el gráfico ambas elipses correspondientes a los clústers 1 y 2 se solapan probablemente porque se han plasmado bajo solamente las dos primeras dimensiones del MFA o simplemente porqué los propios datos de todos los bloques no permiten establecer una separación total entre dos perfiles de individuos.
+
+## Bloque 4. Caracterización de los clústers
+
+### Pregunta 15
+
+En la Figura 8 se muestran las variables más características de cada clúster, y se representa su desviación respecto a la media global. El clúster 1 presenta un perfil favorable, ya que los valores de las variables clínicas que comunmente se asocian al riesgo cardiovascular se encuentran en el lado negativo respecto al valor medio.
+
+### Pregunta 16
+
+El clúster 2 tiene un perfil opuesto al clúster 1, es decir, las variables clínicas asociadas al riesgo cardiovascular presentan valores positivos respecto a la media, por lo que en general este clúster se puede asociar a un patrón cardiometabólico desfavorable.
+
+### Pregunta 17
+
+Siguiendo la Tabla 6, las variables del bloque *clinical* junto con tax_14, tax_12 y algunas variables metabólicas son las que tienen una diferencia entre sus medias de los clústers mayor. Es decir, son las variables que mejor diferencian los perfiles de los dos clústers.
+
+### Pregunta 18
+
+Tal y como se ha expuesto antes, el perfil cardiometabólico menos saludable se asocia al clúster 2 en el que las variables clínicas más características asociadas comunmente a un mayor riesgo cardiovascular como el BMI, el perímetro de la cintura, la glucosa, la insulina, los triglicéridos, la presión arterial sistólica y la proteina C reactiva, presentan valores superiores a la media global. Por el contrario, el HDL, asociado generalmente a un perfil cardiovascular más favorable, presenta valores inferiores a la media.
+
+# Parte B. Resumen del estudio
+
+Se investiga si la integración de bloques de datos de diferentes ómicas permite identificar patrones biológicos asociados al riesgo cardiovascular. También se explora la posible existencia de metabotipos dentro de la cohorte.
+Se han identificado dos perfiles multiómicos definidos por las variables del bloque de datos *clinical* junto con tax_14, met_20, met_25, met_19, met_05, tax_12 y met_02. Estos perfiles no coinciden completamente con la clasificación habitual de riesgo cardiovascular *High-Low*. Individuos con un determinado riesgo bajo pueden asociarse a un perfil multiómico desfavorable y viceversa.
+
+El MFA ha determinado una dimensión 1 que representa el 15,9% de variabilidad, influenciada en su mayoría por el bloque de datos *metabolomics* pero con una elevada contribución de las variables del bloque *clinical*. La dimensión 1 se asocia a la bioquímica clínica, antropométrica y parcialmente metabolómica de los individuos. Por otro lado, la segunda dimensión explica el 10,9% de la variabilidad y está más asociada al bloque *microbiome*. A pesar de la influencia clínica, esta dimensión contiene altas contribuciones de variables de los bloques *metabolomics* y *microbiome* siendo más híbrida que la dimensión 1.
+
+Se han formado 2 clústers que pueden considerarse posibles metabotipos. El primero se asocia a un riesgo cardiovascular favorable dado que los resultados y las variables características denotan un mejor control lipídico, glucémico y una disminución de la inflamación y presión arterial. El segundo clúster presenta un patrón opuesto al descrito anteriormente por lo que se asocia a un riesgo desfavorable.
+
+La principal limitación del análisis es que las variables metabolómicas y de microbiota no están identificadas, lo que dificulta la interpretación biológica de los perfiles obtenidos. Como trabajo futuro, una vez identificadas estas variables, se podría evaluar si otras soluciones de clustering, con un número diferente de clústeres, permiten distinguir perfiles multiómicos más específicos.
